@@ -1,0 +1,16 @@
+package com.prismora.compat;
+import org.junit.jupiter.api.Test;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.io.IOException;
+import static org.junit.jupiter.api.Assertions.*;
+class LegacyTranslatorTest {
+ static Map<String,byte[]> files(){var f=LegacyPackTest.fixture();f.put("shaders/final.vsh",("#version 120\nvarying vec2 texcoord;\nvoid main(){gl_Position=ftransform();texcoord=gl_MultiTexCoord0.xy;}\n").getBytes(StandardCharsets.UTF_8));f.put("shaders/final.fsh",("#version 120\n#define EXPOSURE 1.0 // [0.5 1.0 2.0]\nuniform sampler2D colortex0;\nuniform float viewWidth;\nvarying vec2 texcoord;\nvoid main(){gl_FragColor=texture2D(colortex0,texcoord)*EXPOSURE+vec4(0.0/viewWidth);}\n").getBytes(StandardCharsets.UTF_8));return f;}
+ @Test void translatesLegacyQuadUniformsAndOutputs()throws Exception{
+  var p=LegacyPack.inspect("test",files());var vs=new ShaderPreprocessor(p,Map.of(),Map.of()).process("shaders/final.vsh");var fs=new ShaderPreprocessor(p,Map.of(),Map.of()).process("shaders/final.fsh");var out=new LegacyTranslator().translate(vs,fs);
+  assertTrue(out.vertex().contains("gl_VertexIndex"));assertFalse(out.vertex().contains("ftransform("));assertTrue(out.fragment().contains("colortex0Sampler"));assertFalse(out.fragment().contains("uniform float viewWidth"));assertTrue(out.dynamic());assertTrue(out.fragment().contains("layout(location=0) out vec4 prismoraFragColor"));
+ }
+ @Test void adapterCreatesNativePassesAndPreservesOptions()throws Exception{var p=LegacyPack.inspect("test",files());var converted=LegacyAdapter.prepare(p.snapshot(),Map.of("EXPOSURE","2.0"),"minecraft:overworld");assertEquals("screen",converted.manifest().getAsJsonArray("passes").get(0).getAsJsonObject().get("output").getAsString());assertTrue(new String(converted.files().get("shaders/prismora_legacy/p0.fsh"),StandardCharsets.UTF_8).contains("#define EXPOSURE 2.0"));}
+ @Test void refusesGeometryAndMultipleTargetsInsteadOfPretendingSupport()throws Exception{var f=files();f.put("shaders/gbuffers_terrain.fsh","void main(){}".getBytes(StandardCharsets.UTF_8));assertThrows(IOException.class,()->LegacyAdapter.prepare(LegacyPack.inspect("test",f).snapshot(),Map.of(),"minecraft:overworld"));f.remove("shaders/gbuffers_terrain.fsh");f.put("shaders/final.fsh","/* DRAWBUFFERS:01 */\nvoid main(){}".getBytes(StandardCharsets.UTF_8));assertThrows(IOException.class,()->LegacyAdapter.prepare(LegacyPack.inspect("test",f).snapshot(),Map.of(),"minecraft:overworld"));}
+ @Test void errorSourceIdsMapBackToOriginalFile(){var map=new com.google.gson.JsonObject();map.addProperty("2","shaders/lib/color.glsl");assertEquals("shaders/lib/color.glsl:19: error: bad",LegacyAdapter.mapDiagnostics("2:19: error: bad",map));}
+}

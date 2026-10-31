@@ -74,7 +74,14 @@ public final class ShaderController {
         if(busy||closed)return;
         if(entry != null && !entry.valid()) { error=entry.error();return; }
         busy=true;error="";
-        com.prismora.render.PrismoraRenderer.activate(entry==null?null:PackOptions.apply(entry.pack(),config.options(entry.id())),effectivePerformance()).whenCompleteAsync((unused,failure)->{
+        java.util.concurrent.CompletableFuture<Void> activation;
+        try{
+            var pack=entry==null?null:entry.pack();
+            if(com.prismora.compat.LegacyPack.isLegacy(pack))pack=com.prismora.compat.LegacyAdapter.prepare(pack,config.legacyOptions(entry.id()),com.prismora.render.PrismoraRenderer.dimensionName());
+            else if(pack!=null)pack=PackOptions.apply(pack,config.options(entry.id()));
+            activation=com.prismora.render.PrismoraRenderer.activate(pack,effectivePerformance());
+        }catch(Exception e){activation=java.util.concurrent.CompletableFuture.failedFuture(e);}
+        activation.whenCompleteAsync((unused,failure)->{
             if(closed){busy=false;return;}
             if(failure==null) {
                 try { config.select(entry==null?"":entry.id()); } catch(IOException e) { fail(e); }

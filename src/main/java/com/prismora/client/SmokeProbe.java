@@ -23,6 +23,7 @@ public final class SmokeProbe {
   if(Boolean.getBoolean("prismora.uiSmoke") && event.getScreen() instanceof com.prismora.client.gui.PerformanceScreen && Minecraft.getInstance().gui.overlay()==null && ++performanceFrames==30)net.minecraft.client.Screenshot.grab(Minecraft.getInstance().gameDirectory,"prismora-performance.png",Minecraft.getInstance().gameRenderer.mainRenderTarget(),1,message->{});
  }
  @SubscribeEvent public static void tick(TickEvent.ClientTickEvent.Post event) {
+  if(Boolean.getBoolean("prismora.legacyRenderSmoke")){LegacyRenderSmokeProbe.tick();return;}
   if(Boolean.getBoolean("prismora.legacyUiSmoke")){LegacyUiSmokeProbe.tick();return;}
   if(Boolean.getBoolean("prismora.performanceSmoke")){PerformanceSmokeProbe.tick();return;}
   if(Boolean.getBoolean("prismora.renderSmoke")) { RenderSmokeProbe.tick(); return; }

@@ -17,11 +17,14 @@ public final class PrismoraRenderer {
  private static boolean initialized,ready,inFlight;
  private static int compiledWidth,compiledHeight;
  private static boolean dynamicData;
+ private static com.google.gson.JsonObject sourceFiles=new com.google.gson.JsonObject();
+ public static String dimensionName(){var level=Minecraft.getInstance().level;return level==null?"minecraft:overworld":level.dimension().identifier().toString();}
  public static int compiledWidth(){return compiledWidth;}
  public static int compiledHeight(){return compiledHeight;}
  public static com.google.gson.JsonObject activeChain(){return active.isEmpty()?new com.google.gson.JsonObject():com.google.gson.JsonParser.parseString(new String(active.get("assets/minecraft/post_effect/end_of_frame.json"),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();}
  private static Map<String,byte[]> compile(PackLoader.ShaderPack pack,com.prismora.performance.PerformanceSettings settings){
   if(com.prismora.compat.LegacyPack.isLegacy(pack))throw new IllegalArgumentException("OptiFine/Iris shaderpack detected. Metadata is readable; its rendering bridge is not enabled yet.");
+  sourceFiles=pack.manifest().has("legacySourceFiles")?pack.manifest().getAsJsonObject("legacySourceFiles"):new com.google.gson.JsonObject();
   var window=Minecraft.getInstance().getWindow();compiledWidth=window.getWidth();compiledHeight=window.getHeight();
   var result=new PackCompiler().compile(pack,settings,compiledWidth,compiledHeight);
   dynamicData=new String(result.get("assets/minecraft/post_effect/end_of_frame.json"),java.nio.charset.StandardCharsets.UTF_8).contains("PrismoraData");return result;
@@ -31,7 +34,11 @@ public final class PrismoraRenderer {
   try {
    var root=Minecraft.getInstance().gameDirectory.toPath();
    var config=new com.prismora.client.config.PrismoraConfig(root.resolve("config/prismora.json"));config.load();
-   if(!config.selected().isEmpty()) active=compile(com.prismora.pack.PackOptions.apply(new PackLoader().load(root.resolve("shaderpacks").resolve(config.selected())),config.options(config.selected())),config.performance());
+   if(!config.selected().isEmpty()){
+    var pack=new PackLoader().load(root.resolve("shaderpacks").resolve(config.selected()));
+    if(com.prismora.compat.LegacyPack.isLegacy(pack))pack=com.prismora.compat.LegacyAdapter.prepare(pack,config.legacyOptions(pack.id()),dimensionName());else pack=com.prismora.pack.PackOptions.apply(pack,config.options(config.selected()));
+    active=compile(pack,config.performance());
+   }
   } catch(Exception e) { Prismora.LOGGER.error("Cannot restore selected shaderpack",e);active=Map.of(); }
  }
  public static void provide(Consumer<Pack> consumer) {
@@ -79,7 +86,7 @@ public final class PrismoraRenderer {
   var projection=new net.minecraft.client.renderer.Projection();projection.setupOrtho(0.1F,1000F,1F,1F,false);
   try(var diagnostics=new CompileDiagnostics();var buffer=new net.minecraft.client.renderer.ProjectionMatrixBuffer("prismora-validation")) {
    try(var chain=net.minecraft.client.renderer.PostChain.load(config,Minecraft.getInstance().getTextureManager(),LevelTargetBundle.MAIN_TARGETS,Identifier.withDefaultNamespace("end_of_frame"),projection,buffer)) { }
-   catch(Exception e) { throw new IllegalStateException(e.getMessage()+"\n"+diagnostics.details(),e); }
+   catch(Exception e) { throw new IllegalStateException(com.prismora.compat.LegacyAdapter.mapDiagnostics(e.getMessage()+"\n"+diagnostics.details(),sourceFiles),e); }
   } catch(Exception e) { throw new IllegalStateException("Shader compilation failed: "+e.getMessage(),e); }
  }
  public static void clearSnapshot() { active=Map.of(); }
