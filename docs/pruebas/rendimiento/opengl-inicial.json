@@ -1,0 +1,76 @@
+{
+  "gpu": "NVIDIA GeForce RTX 5060 Ti/PCIe/SSE2",
+  "backend": "OpenGL",
+  "driver": "3.3.0 NVIDIA 621.01",
+  "os": "Windows 11",
+  "width": 1280,
+  "height": 720,
+  "scope": "Whole GameRenderer GPU time; wall frames include FPS caps. Profiles on one GPU are not tests of other GPU models. No synthetic load used in these measurements.",
+  "profiles": [
+    {
+      "profile": "vanilla",
+      "samples": 180,
+      "frameP50Ms": 33.1824,
+      "frameP95Ms": 35.1795,
+      "fpsFromMedian": 30.136457881286464,
+      "gpuP50Ms": 0.293205,
+      "gpuP95Ms": 0.353184,
+      "meets30FpsP95": false,
+      "privateTargetPixels": 0,
+      "nominalTargetBytes": 0,
+      "nativePasses": 0
+    },
+    {
+      "profile": "ENTRY",
+      "samples": 180,
+      "frameP50Ms": 33.1354,
+      "frameP95Ms": 35.7251,
+      "fpsFromMedian": 30.17920411402911,
+      "gpuP50Ms": 0.438058,
+      "gpuP95Ms": 0.595434,
+      "meets30FpsP95": false,
+      "privateTargetPixels": 0,
+      "nominalTargetBytes": 0,
+      "nativePasses": 0
+    },
+    {
+      "profile": "LOW",
+      "samples": 180,
+      "frameP50Ms": 33.1395,
+      "frameP95Ms": 35.2647,
+      "fpsFromMedian": 30.17547036014424,
+      "gpuP50Ms": 0.58849,
+      "gpuP95Ms": 0.707008,
+      "meets30FpsP95": false,
+      "privateTargetPixels": 403200,
+      "nominalTargetBytes": 3225600,
+      "nativePasses": 5
+    },
+    {
+      "profile": "MEDIUM",
+      "samples": 180,
+      "frameP50Ms": 33.2886,
+      "frameP95Ms": 35.2307,
+      "fpsFromMedian": 30.040314101524242,
+      "gpuP50Ms": 0.604565,
+      "gpuP95Ms": 0.741205,
+      "meets30FpsP95": false,
+      "privateTargetPixels": 907200,
+      "nominalTargetBytes": 7257600,
+      "nativePasses": 5
+    },
+    {
+      "profile": "HIGH",
+      "samples": 180,
+      "frameP50Ms": 33.1762,
+      "frameP95Ms": 35.1947,
+      "fpsFromMedian": 30.142089811370802,
+      "gpuP50Ms": 0.599232,
+      "gpuP95Ms": 0.685066,
+      "meets30FpsP95": false,
+      "privateTargetPixels": 1612800,
+      "nominalTargetBytes": 12902400,
+      "nativePasses": 5
+    }
+  ]
+}

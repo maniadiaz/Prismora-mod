@@ -54,6 +54,15 @@ Los errores de carga o compilación se muestran en la pantalla de Prismora; los 
 }
 ```
 
-El destino debe ser un uniform float existente en el bloque indicado. La pantalla Opciones incrementa el valor por `step` y vuelve a `min` al superar `max`; se guarda por nombre de archivo/carpeta de pack y se recompila. Los valores guardados fuera de rango se acotan al aplicar. La etiqueta pertenece al pack; el resto de la interfaz tiene traducciones español/inglés.
+El destino debe ser un uniform float existente en el bloque indicado. La pantalla Opciones permite editar valores con el widget declarado y aplicar por lote; se guarda por nombre de archivo/carpeta de pack y se recompila. Los valores guardados fuera de rango se acotan al aplicar. La etiqueta pertenece al pack; el resto de la interfaz tiene traducciones español/inglés.
 
 La recarga automática observa el directorio raíz y los subdirectorios del pack seleccionado, agrupa eventos durante 600 ms y reemplaza la instantánea de recursos completa. No deja abiertos los ZIP.
+
+
+## Extensiones de calidad desde Prismora 0.2
+
+Una pasada puede declarar `"feature":"bloom", "bypass":"SceneColor"`. `bypass` nombra un sampler presente en `inputs`: cuando bloom está apagado, la salida se convierte en alias de esa entrada y la pasada no se compila ni ejecuta. El bypass debe ser color, nunca `sceneDepth`. Las referencias posteriores se resuelven a través del alias. Un pack compuesto solo por bloom puede resultar en una cadena vacía, sin targets privados.
+
+`scale` opcional de pasada: 0.25..1 relativo al ajuste global. El bloom de ejemplo usa 0.5 en extracción/desenfoque y 1 en composición. Cada dimensión final es `ceil(dimensión de ventana o declarada × escala global × escala de pasada)`, con mínimo 1 y máximo 8192. Al redimensionar se agrupan eventos durante 600 ms y se recarga una vez estable. Los samplers de color y la copia final usan filtrado bilineal; la profundidad conserva lectura sin interpolación de color.
+
+Las opciones pueden tener `widget: "slider"` (predeterminado), `"toggle"` o `"choice"`. Toggle exige rango 0..1, step 1 y default 0/1. Choice añade `values` (2..16 números únicos del rango, incluyendo default) y `labels` opcional de igual longitud. Los valores se normalizan antes de compilar. `Prismora-Color` demuestra toggle de tinte y choice de exposición. La pantalla conserva un borrador y solo guarda/recompila al pulsar Aplicar.

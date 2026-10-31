@@ -7,7 +7,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 public final class PerformanceScreen extends Screen {
  private final Screen parent;private final ShaderController controller=ShaderController.INSTANCE;
- private PerformanceSettings draft;
+ private PerformanceSettings draft;private boolean wasBusy;
  public PerformanceScreen(Screen parent){super(Component.translatable("prismora.performance"));this.parent=parent;draft=controller.performance();}
  private Component state(String key,boolean on){return Component.translatable(key).append(": ").append(Component.translatable(on?"options.on":"options.off"));}
  @Override protected void init(){
@@ -25,6 +25,7 @@ public final class PerformanceScreen extends Screen {
   var apply=Button.builder(Component.translatable("prismora.apply"),b->{controller.performance(draft);}).bounds(left,height-32,146,20).build();apply.active=!controller.busy();addRenderableWidget(apply);
   addRenderableWidget(Button.builder(Component.translatable("gui.done"),b->onClose()).bounds(left+154,height-32,146,20).build());
  }
+ @Override public void tick(){if(wasBusy!=controller.busy()){wasBusy=controller.busy();rebuildWidgets();}}
  @Override public void extractRenderState(GuiGraphicsExtractor g,int x,int y,float partial){super.extractRenderState(g,x,y,partial);g.centeredText(font,title,width/2,14,0xFFFFFFFF);g.centeredText(font,Component.translatable("prismora.profile."+draft.profile().name().toLowerCase(java.util.Locale.ROOT)),width/2,172,0xFFBBBBBB);
   var metrics=com.prismora.client.AdaptivePerformance.metrics();if(metrics!=null)g.centeredText(font,Component.literal(String.format(java.util.Locale.ROOT,"%.0f FPS | p95 %.1f ms | GPU %.1f ms",metrics.fps(),metrics.frameP95(),metrics.gpuP95())),width/2,184,0xFFBBBBBB);}
  @Override public void onClose(){minecraft.gui.setScreen(parent);}

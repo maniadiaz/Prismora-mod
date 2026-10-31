@@ -75,6 +75,7 @@ public final class PackLoader {
                 if(pass.has("scale")) {double scale=pass.get("scale").getAsDouble();if(!Double.isFinite(scale)||scale<0.25||scale>1)throw new IOException("Pass scale must be 0.25..1");}
                 if(pass.has("feature")) {
                     if(!pass.get("feature").getAsString().equals("bloom") || !pass.has("bypass") || !pass.getAsJsonObject("inputs").has(pass.get("bypass").getAsString()))throw new IOException("Optional pass requires a known feature and bypass sampler");
+                    if(pass.getAsJsonObject("inputs").get(pass.get("bypass").getAsString()).getAsString().equals("sceneDepth"))throw new IOException("A depth buffer cannot be used as a color bypass");
                 }
                 String output = pass.get("output").getAsString();
                 if(output.equals("screen") && value!=passes.get(passes.size()-1))throw new IOException("Only the last pass can output to screen");

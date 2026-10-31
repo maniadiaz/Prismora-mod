@@ -15,3 +15,5 @@ Cada etapa se valida y sube con commit independiente. El plan adjunto de compati
 - Etapa 1: presets y migración de configuración implementados y probados, commit 1f9a484.
 - Etapa 2: escala de buffers y poda de bloom comprobadas en JAR real Vulkan. Regresión de postproceso existente comprobada en OpenGL. Sliders con aplicación por lote, toggles y elecciones tipadas incorporados; las comprobaciones finales de UI y render se repiten en la etapa de validación.
 - La política adaptativa incluye pruebas deterministas de presión GPU, calentamiento, cooldown y límites de CPU/VSync; su integración y mediciones se cierran en la siguiente etapa.
+
+- Etapa 3: fallback ante presión sintética de política comprobado en cliente real OpenGL: se retira el shader, se conserva la selección y Recargar lo reactiva. Toggle y choice modifican los uniforms compilados del pack Color. El benchmark de vanilla y los cuatro perfiles exporta mediciones reales, separadas de esa presión sintética. No se simula hardware de entrada para afirmar compatibilidad.

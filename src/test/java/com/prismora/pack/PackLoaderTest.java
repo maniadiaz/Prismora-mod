@@ -52,5 +52,10 @@ class PackLoaderTest {
         Files.writeString(m,original.replace("\"passes\"", "\"targets\":{\"huge\":{\"width\":99999}},\"passes\""));assertThrows(IOException.class,()->new PackLoader().load(p));
         Files.writeString(m,original.replace("\"sceneColor\"","\"cycle\"").replace("\"screen\"","\"cycle\""));assertThrows(IOException.class,()->new PackLoader().load(p));
     }
+    @Test void rejectsUnsafeOptionalColorBypass()throws Exception{
+        Path root=pack();Path metadata=root.resolve("pack.json");var json=com.google.gson.JsonParser.parseString(Files.readString(metadata)).getAsJsonObject();var pass=json.getAsJsonArray("passes").get(0).getAsJsonObject();
+        pass.addProperty("feature","bloom");pass.addProperty("bypass","Missing");Files.writeString(metadata,json.toString());assertThrows(IOException.class,()->new PackLoader().load(root));
+        pass.addProperty("bypass","SceneColor");pass.getAsJsonObject("inputs").addProperty("SceneColor","sceneDepth");Files.writeString(metadata,json.toString());assertThrows(IOException.class,()->new PackLoader().load(root));
+    }
     @Test void validatesPaths() { for(String s : new String[]{"/absolute", "a/../b", "C:/file", "a\\b", "a//b"}) assertThrows(IOException.class,()->PackLoader.safePath(s)); }
 }

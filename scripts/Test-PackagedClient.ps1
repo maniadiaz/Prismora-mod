@@ -33,7 +33,9 @@ repositories {
 dependencies { implementation minecraft.dependency('net.minecraftforge:forge:26.3-66.1.0') }
 '@ | Set-Content -Encoding utf8 -LiteralPath (Join-Path $isolated 'build.gradle')
     "rootProject.name = 'prismora-packaged-verification'" | Set-Content -Encoding utf8 -LiteralPath (Join-Path $isolated 'settings.gradle')
-    Copy-Item -LiteralPath build/libs/prismora-0.1.0.jar -Destination (Join-Path $isolated 'run/mods/prismora-0.1.0.jar') -Force
+    Copy-Item -LiteralPath build/libs/prismora-0.2.0.jar -Destination (Join-Path $isolated 'run/mods/prismora-0.2.0.jar') -Force
+    # This directory is an isolated test fixture; remove only older Prismora build artifacts.
+    Get-ChildItem -LiteralPath (Join-Path $isolated 'run/mods') -Filter 'prismora-*.jar' -File | Where-Object Name -ne 'prismora-0.2.0.jar' | ForEach-Object { Remove-Item -LiteralPath $_.FullName }
     Get-ChildItem -LiteralPath examples -Directory | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $isolated 'run/shaderpacks') -Recurse -Force }
     $options=Join-Path $isolated 'run/options.txt'
     $lines=if(Test-Path -LiteralPath $options){@(Get-Content -LiteralPath $options | Where-Object {$_ -notlike 'preferredGraphicsBackend:*'})}else{@('version:5023')}
@@ -44,7 +46,7 @@ dependencies { implementation minecraft.dependency('net.minecraftforge:forge:26.
     & .\gradlew.bat -p $isolated runClient "-PprismoraProbe=$Probe" --console=plain
     if($LASTEXITCODE -ne 0){throw 'Packaged client failed'}
     $log=Get-Content -Raw -LiteralPath (Join-Path $isolated 'run/logs/latest.log')
-    $markers=if($Probe -eq 'performance'){@('PRISMORA_SCALED_TARGETS_PASS','PRISMORA_ENTRY_PROFILE_PASS','PRISMORA_PERFORMANCE_SMOKE_PASS')}else{@('PRISMORA_GPU_PASS','PRISMORA_RENDER_SMOKE_PASS','PRISMORA_ERROR_RECOVERY_PASS','PRISMORA_BLOOM_PASS','PRISMORA_OPTIONS_PASS','PRISMORA_HOT_RELOAD_PASS','PRISMORA_RESTORE_PASS','PRISMORA_RESIZE_PASS')}
+    $markers=if($Probe -eq 'performance'){@('PRISMORA_SCALED_TARGETS_PASS','PRISMORA_ENTRY_PROFILE_PASS','PRISMORA_PERFORMANCE_SMOKE_PASS','PRISMORA_ADAPTIVE_FALLBACK_PASS','PRISMORA_OPTION_WIDGETS_PASS','PRISMORA_PROFILE_BENCHMARK_PASS')}else{@('PRISMORA_GPU_PASS','PRISMORA_RENDER_SMOKE_PASS','PRISMORA_ERROR_RECOVERY_PASS','PRISMORA_BLOOM_PASS','PRISMORA_OPTIONS_PASS','PRISMORA_HOT_RELOAD_PASS','PRISMORA_RESTORE_PASS','PRISMORA_RESIZE_PASS')}
     foreach($marker in $markers){
         if(-not $log.Contains($marker)){throw "Missing packaged validation marker: $marker"}
     }
