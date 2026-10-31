@@ -73,3 +73,11 @@ Prototipar un pack de recursos interno de prioridad alta y solo presente cuando 
 - CI añade Linux para build/unit tests; no equivale a probar render en Linux ni otras GPU. Las mediciones de entrada/baja/media/alta corresponden a presets en el mismo hardware físico, no a tarjetas distintas.
 
 - CI Windows y Ubuntu finalizó correctamente en la ejecución 41160406783. El probe visual adicional renderizó la pantalla Rendimiento sin overlay de carga; la captura final se incluye en docs/screenshots/performance.png. Resumen de la ampliación: docs/pruebas/RESULTADOS-0.2.0.json.
+
+## Menús compactos
+
+El menú de opciones legacy limita su área a 420x300 unidades GUI y la centra, con columnas y controles de pie ajustados a ese ancho. La pantalla de errores limita el texto a un panel de 420x240 y ajusta sus líneas. Ambos se reducen con la ventana; no se modifica la escala GUI de la instalación del jugador.
+
+Validación: build y 65 pruebas unitarias aprobadas. Probe visual de cliente con Complementary r5.9.3, 1920x1080 y 854x480 (escala GUI 2 en el entorno de prueba): navegación a Performance Settings, límites de controles, centrado y ausencia de solapamientos. Marcador PRISMORA_COMPACT_UI_PASS. Capturas inspeccionadas en docs/screenshots/compact.
+
+Reproducir: `gradlew.bat runClient -PprismoraLegacyUiSmoke=true -PprismoraCompactUiSmoke=true` con el ZIP oficial instalado en run/shaderpacks. Este probe verifica el menú, no el render del shaderpack.
