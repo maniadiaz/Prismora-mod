@@ -1,0 +1,42 @@
+{
+  "version": "0.2.0",
+  "date": "2026-10-30",
+  "unitTests": {
+    "tests": 37,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "physicalGpu": "NVIDIA GeForce RTX 5060 Ti",
+  "physicalOs": "Windows 11",
+  "performance": {
+    "opengl": {
+      "SCALED_TARGETS": true,
+      "ENTRY_PROFILE": true,
+      "ADAPTIVE_FALLBACK": true,
+      "OPTION_WIDGETS": true,
+      "PROFILE_BENCHMARK": true,
+      "PERFORMANCE_SMOKE": true
+    },
+    "vulkan": {
+      "SCALED_TARGETS": true,
+      "ENTRY_PROFILE": true,
+      "ADAPTIVE_FALLBACK": true,
+      "OPTION_WIDGETS": true,
+      "PROFILE_BENCHMARK": true,
+      "PERFORMANCE_SMOKE": true
+    }
+  },
+  "regression": {
+    "opengl": true,
+    "vulkan": true
+  },
+  "ciVerifiedRun": "https://github.com/maniadiaz/Prismora-mod/actions/runs/41160406783",
+  "ciScope": "Build and unit tests on Windows and Ubuntu, not GPU render on Ubuntu",
+  "unverified": [
+    "Other physical GPUs, including entry/integrated",
+    "Linux GPU rendering",
+    "OptiFine/Iris shaderpack compatibility, G-buffers and shadows"
+  ],
+  "performanceUi": true
+}

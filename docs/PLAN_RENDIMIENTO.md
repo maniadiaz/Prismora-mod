@@ -17,3 +17,7 @@ Cada etapa se valida y sube con commit independiente. El plan adjunto de compati
 - La política adaptativa incluye pruebas deterministas de presión GPU, calentamiento, cooldown y límites de CPU/VSync; su integración y mediciones se cierran en la siguiente etapa.
 
 - Etapa 3: fallback ante presión sintética de política comprobado en cliente real OpenGL: se retira el shader, se conserva la selección y Recargar lo reactiva. Toggle y choice modifican los uniforms compilados del pack Color. El benchmark de vanilla y los cuatro perfiles exporta mediciones reales, separadas de esa presión sintética. No se simula hardware de entrada para afirmar compatibilidad.
+
+- Etapa 4: 37 pruebas unitarias locales sin fallos; prueba del JAR y benchmark de perfiles completados en OpenGL y Vulkan sobre RTX 5060 Ti. Regresión de errores/recarga/resize en ambos backends y resultados finales registrados en docs/RENDIMIENTO.md y docs/pruebas/rendimiento. CI Linux compila y pasa unit tests; el render Linux y hardware de otras gamas siguen sin medir.
+
+Se entrega 0.2.0 para los controles y rendimiento del cargador actual. No se marca como cumplido el plan completo de compatibilidad OptiFine/Iris del adjunto: las fases de traductor, programas de geometría y sombras requieren desarrollo adicional y pruebas con packs reales.

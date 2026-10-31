@@ -189,3 +189,8 @@ Base y selección subidas a Git. Postproceso validado en cliente real con OpenGL
 ### Estado de esta entrega
 
 Etapas 0–3 implementadas y verificadas. Etapa 4 cerrada como investigación con limitación documentada; no se han implementado G-buffer ni sombras solares. Etapa 5 incluye opciones, recarga automática, matriz de render, pruebas del JAR y distribución local; publicación externa y decisión final de licencia pendientes. Véanse README.md, docs/VALIDACION.md y docs/PUBLICACION.md.
+
+
+## Ampliación 0.2.0 — Rendimiento
+
+Perfiles Entrada/Baja/Media/Alta, escala de postproceso, bloom opcional, sliders/toggles/choices, política adaptativa con fallback, presupuestos nominales de targets y benchmark reproducible. Plan y estado: docs/PLAN_RENDIMIENTO.md. Resultados físicos: docs/RENDIMIENTO.md. El nuevo plan OptiFine/Iris propuesto está guardado y ampliado en docs/PLAN_COMPATIBILIDAD_PROPUESTO.md; no se declara implementado por estos ajustes de rendimiento.

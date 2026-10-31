@@ -21,7 +21,7 @@ final class RenderSmokeProbe {
   if(timer.getStatus()==com.mojang.blaze3d.systems.TimerQuery.Status.NOT_RECORDING){
    if(timerLabel!=null && timer.get()>0)gpu.computeIfAbsent(timerLabel,k->new java.util.ArrayList<>()).add(timer.get());
    timerLabel=null;
-   if(state==1 && worldTicks>30)timerLabel="vanilla";
+   if(state==1 && worldTicks>30)timerLabel="startup_scene";
    if(state==6 && !ShaderController.INSTANCE.busy() && worldTicks>20)timerLabel="bloom";
    if(timerLabel!=null)timer.beginProfile();
   }

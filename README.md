@@ -19,6 +19,8 @@ Los cambios de shader se recargan tras un breve debounce. Los parámetros se gua
 
 ## Calidad y rendimiento
 
+![Perfiles y controles de rendimiento](docs/screenshots/performance.png)
+
 Abre **Prismora → Rendimiento**. Elige un perfil o personaliza escala, bloom, objetivo FPS, adaptación y fallback; pulsa **Aplicar**.
 
 | Perfil | Escala de postproceso | Bloom del ejemplo | Objetivo |

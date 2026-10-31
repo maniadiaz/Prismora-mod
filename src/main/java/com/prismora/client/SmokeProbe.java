@@ -11,13 +11,16 @@ import net.minecraftforge.fml.common.Mod;
 /** Opt-in real-client probe; disabled in normal play. */
 @Mod.EventBusSubscriber(modid=Prismora.MOD_ID,value=Dist.CLIENT)
 public final class SmokeProbe {
- private static int ticks,frames,uiFrames;
+ private static int ticks,frames,uiFrames,performanceFrames;
  @SubscribeEvent public static void frame(ScreenEvent.Render.Post event) {
   if(Boolean.getBoolean("prismora.smoke")) frames++;
   if(Boolean.getBoolean("prismora.uiSmoke") && event.getScreen() instanceof com.prismora.client.gui.ShaderPackScreen) {
    uiFrames++;
    if(uiFrames==50 && Minecraft.getInstance().gui.overlay()==null)net.minecraft.client.Screenshot.grab(Minecraft.getInstance().gameDirectory,"prismora-selection.png",Minecraft.getInstance().gameRenderer.mainRenderTarget(),1,message->{});
   }
+ }
+ @SubscribeEvent public static void performanceFrame(ScreenEvent.Render.Post event){
+  if(Boolean.getBoolean("prismora.uiSmoke") && event.getScreen() instanceof com.prismora.client.gui.PerformanceScreen && Minecraft.getInstance().gui.overlay()==null && ++performanceFrames==30)net.minecraft.client.Screenshot.grab(Minecraft.getInstance().gameDirectory,"prismora-performance.png",Minecraft.getInstance().gameRenderer.mainRenderTarget(),1,message->{});
  }
  @SubscribeEvent public static void tick(TickEvent.ClientTickEvent.Post event) {
   if(Boolean.getBoolean("prismora.performanceSmoke")){PerformanceSmokeProbe.tick();return;}
@@ -34,7 +37,10 @@ public final class SmokeProbe {
    if(java.util.Arrays.stream(mc.options.keyMappings).filter(key->key.getName().equals("key.prismora.open")).count()!=1)throw new IllegalStateException("Prismora keybind not registered exactly once");
    Prismora.LOGGER.info("PRISMORA_VIDEO_BUTTON_PASS: video settings button opens Prismora; configurable keybind registered");
   }
+  if(Boolean.getBoolean("prismora.uiSmoke") && ticks==105)mc.gui.setScreen(new com.prismora.client.gui.PerformanceScreen(new TitleScreen()));
   if(Boolean.getBoolean("prismora.uiSmoke") && ticks==140) {
+   if(performanceFrames<10)throw new IllegalStateException("Performance UI did not render");
+   Prismora.LOGGER.info("PRISMORA_PERFORMANCE_UI_PASS: quality controls rendered {} frames",performanceFrames);
    if(uiFrames<10) throw new IllegalStateException("Prismora UI did not render");
    Prismora.LOGGER.info("PRISMORA_UI_PASS: {} rendered shader selection frames",uiFrames);
    mc.gui.setScreen(new TitleScreen());

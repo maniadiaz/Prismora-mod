@@ -62,3 +62,14 @@ Prototipar un pack de recursos interno de prioridad alta y solo presente cuando 
 - Publicación en plataformas no ejecutada. Código original con All Rights Reserved y avisos del MDK conservados; la elección definitiva de licencia corresponde al titular.
 
 - Integración final de UI: botón real de Ajustes de vídeo invocado y pantalla de Prismora abierta; tecla configurable registrada una sola vez. Se renderizaron 125 frames de la pantalla antes de regresar al menú y cerrar. Capturas inspeccionadas en `docs/screenshots/`.
+
+
+## Ampliación 0.2.0
+
+- 37 pruebas JUnit locales: persistencia/migración, perfiles, escala, límites de memoria, bypass de pasadas, tipos de widget y política adaptativa (presión sostenida, calentamiento, cooldown y límites aislados de CPU/VSync), además de regresiones anteriores.
+- JAR aislado Windows, OpenGL y Vulkan: buffers Alta/Baja comprobados, lectura de imagen escalada, Entrada con cero pasadas de bloom, preset persistido, fallback real solicitado por política con presión sintética, selección conservada y reactivación manual. Toggle/choice del pack Color cambian uniforms compilados; pantallas inspeccionadas mediante capturas.
+- Benchmark de vanilla y cuatro perfiles: 1280x720 en RTX 5060 Ti, muestras reales con TimerQuery, sin presión sintética durante las mediciones; informes y límites en RENDIMIENTO.md. El límite AFK inicial se identificó, se documentó y se evitó en las mediciones finales.
+- Regresión de shader inválido, recarga, persistencia, edición de archivos y redimensionado: scripts del JAR en ambos backends. Los mensajes de error de GLSL durante la prueba negativa son esperados.
+- CI añade Linux para build/unit tests; no equivale a probar render en Linux ni otras GPU. Las mediciones de entrada/baja/media/alta corresponden a presets en el mismo hardware físico, no a tarjetas distintas.
+
+- CI Windows y Ubuntu finalizó correctamente en la ejecución 41160406783. El probe visual adicional renderizó la pantalla Rendimiento sin overlay de carga; la captura final se incluye en docs/screenshots/performance.png. Resumen de la ampliación: docs/pruebas/RESULTADOS-0.2.0.json.

@@ -50,7 +50,7 @@ final class PerformanceSmokeProbe {
    Prismora.LOGGER.info("PRISMORA_ADAPTIVE_FALLBACK_PASS: synthetic policy pressure caused real vanilla fallback; selection preserved");
    mc.gui.setScreen(new com.prismora.client.gui.PerformanceScreen(new TitleScreen()));state=8;wait=0;
   }
-  if(state==8 && ++wait>30){Screenshot.grab(mc.gameDirectory,"prismora-performance.png",mc.gameRenderer.mainRenderTarget(),1,message->{});mc.gui.setScreen(null);controller.reload();state=9;wait=0;}
+  if(state==8 && mc.gui.overlay()==null && ++wait>30){Screenshot.grab(mc.gameDirectory,"prismora-performance.png",mc.gameRenderer.mainRenderTarget(),1,message->{});mc.gui.setScreen(null);controller.reload();state=9;wait=0;}
   if(state==9 && !controller.busy() && mc.gui.overlay()==null && ++wait>40){
    if(controller.suspended())throw new IllegalStateException("Manual reload did not resume shader");
    controller.select(controller.entries().stream().filter(e->e.id().equals("Prismora-Color")).findFirst().orElseThrow());state=10;wait=0;
