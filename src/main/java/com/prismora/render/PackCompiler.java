@@ -9,6 +9,7 @@ import java.util.*;
 public final class PackCompiler {
  public Map<String,byte[]> compile(PackLoader.ShaderPack pack) {
   Map<String,byte[]> resources=new TreeMap<>();
+  pack.files().forEach((path,bytes)->{if(path.matches("shaders/include/[a-z0-9_/]+\\.glsl"))resources.put("assets/prismora/"+path,bytes);});
   JsonObject chain=new JsonObject(),targets=new JsonObject();JsonArray passes=new JsonArray();
   for(var value:pack.manifest().getAsJsonArray("passes")) {
    var source=value.getAsJsonObject();var pass=new JsonObject();
@@ -20,13 +21,21 @@ public final class PackCompiler {
    }
    JsonArray inputs=new JsonArray();
    for(var input:source.getAsJsonObject("inputs").entrySet()) {
-    var item=new JsonObject();item.addProperty("sampler_name",input.getKey());item.addProperty("target",target(input.getValue().getAsString()));inputs.add(item);
+    var item=new JsonObject();item.addProperty("sampler_name",input.getKey());item.addProperty("target",target(input.getValue().getAsString()));if(input.getValue().getAsString().equals("sceneDepth"))item.addProperty("use_depth_buffer",true);inputs.add(item);
+   }
+   if(pack.manifest().has("dynamicUniforms") && pack.manifest().get("dynamicUniforms").getAsBoolean()) {
+    var data=new JsonObject();data.addProperty("sampler_name","PrismoraData");data.addProperty("location","prismora:uniforms");data.addProperty("width",16);data.addProperty("height",1);inputs.add(data);
    }
    pass.add("inputs",inputs);
    String output=source.get("output").getAsString();
    // Always render into a private target and blit to main to avoid texture feedback.
-   String outputId=output.equals("screen")?"prismora:final":target(output);
-   targets.add(outputId,new JsonObject());pass.addProperty("output",outputId);
+   String outputId=output.equals("screen")?"prismora:__screen":target(output);
+   JsonObject descriptor=new JsonObject();
+   if(!output.equals("screen") && pack.manifest().has("targets") && pack.manifest().getAsJsonObject("targets").has(output)) {
+    var declared=pack.manifest().getAsJsonObject("targets").getAsJsonObject(output);
+    for(String key:List.of("width","height"))if(declared.has(key))descriptor.add(key,declared.get(key).deepCopy());
+   }
+   targets.add(outputId,descriptor);pass.addProperty("output",outputId);
    if(source.has("uniforms")) pass.add("uniforms",source.get("uniforms").deepCopy());
    passes.add(pass);
    if(output.equals("screen")) {
@@ -41,5 +50,5 @@ public final class PackCompiler {
   resources.put("pack.mcmeta","{\"pack\":{\"description\":\"Prismora active shaderpack\",\"min_format\":[97,1],\"max_format\":[97,1]}}".getBytes(StandardCharsets.UTF_8));
   return Collections.unmodifiableMap(resources);
  }
- private static String target(String name) { return name.equals("sceneColor")?"minecraft:main":"prismora:"+name; }
+ private static String target(String name) { return (name.equals("sceneColor")||name.equals("sceneDepth"))?"minecraft:main":"prismora:"+name; }
 }

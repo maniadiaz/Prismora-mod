@@ -12,5 +12,6 @@
       },
       "output": "screen"
     }
-  ]
+  ],
+  "dynamicUniforms": true
 }

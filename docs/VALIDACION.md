@@ -36,3 +36,11 @@ Prototipar un pack de recursos interno de prioridad alta y solo presente cuando 
 - Al desactivar, Prismora deja de proporcionar `end_of_frame`; un recurso de otro pack vuelve a estar disponible. Si dos packs lo definen simultáneamente, gana el pack interno superior de Prismora; no hay composición automática entre ambos.
 - `scripts/Test-Prismora.ps1 -Backend opengl` o `-Backend vulkan` reproduce build, tests y prueba de GPU. Comprueba el backend efectivo para detectar fallback.
 - Captura de diagnóstico local: `run/prismora-diagnostic.png` (no versionada).
+
+## Múltiples pasadas
+
+- 14 pruebas JUnit correctas: targets, referencias, persistencia, límites, compilación del manifiesto y roundtrip de bits de floats.
+- OpenGL y Vulkan: cadena de tres pasadas con target 256x256 y otros que siguen la ventana; color final leído de GPU dentro de tolerancia. `dynamicUniforms` comprobado desde el shader (resolución, tiempo y presencia de mundo).
+- Bloom: extracción de brillo, desenfoque horizontal, vertical y composición; cuatro pasadas de pack más copia final segura. Ambos backends compilan y producen una imagen de mundo no uniforme (`PRISMORA_BLOOM_PASS`); captura inspeccionada visualmente.
+- Resolución de prueba: 854x480. Bloom mantiene cuatro targets privados: estimación nominal 12.5 MiB a 8 bytes/píxel entre color y profundidad, más 64 bytes de datos dinámicos; excluye pool de recursos y overhead del driver. Esta cifra es un cálculo, no una lectura de VRAM.
+- El probe usa `TimerQuery` de Mojang entre RenderTick.Pre/Post para medir el render completo y reporta medianas con `PRISMORA_GPU_BENCH`. La generación/carga de chunks y el estado del mundo afectan las medidas; no son garantías de rendimiento ni aíslan el tiempo exclusivo del shader.

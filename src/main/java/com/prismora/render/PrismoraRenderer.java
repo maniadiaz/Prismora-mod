@@ -40,13 +40,14 @@ public final class PrismoraRenderer {
   active=pack==null?Map.of():new PackCompiler().compile(pack);
   Minecraft mc=Minecraft.getInstance();
   return mc.reloadResourcePacks().thenRunAsync(()->{
-   if(pack==null){ready=true;inFlight=false;return;}
+   if(pack==null){ready=true;inFlight=false;Uniforms.release();return;}
    validateCurrent();ready=true;inFlight=false;
    Prismora.LOGGER.info("PRISMORA_SHADER_READY: {}",pack.id());
   },mc);
  }
  public static void beforeFrame() {
   var mc=Minecraft.getInstance();
+  if(!active.isEmpty())Uniforms.update();
   if(!ready && !inFlight && !active.isEmpty() && mc.isGameLoadFinished()) {
    try { validateCurrent();ready=true; }
    catch(Exception e) {
@@ -59,6 +60,7 @@ public final class PrismoraRenderer {
  }
  public static void validateCurrent() {
   if(active.isEmpty())return;
+  Uniforms.ensure();
   var json=com.google.gson.JsonParser.parseString(new String(active.get("assets/minecraft/post_effect/end_of_frame.json"),java.nio.charset.StandardCharsets.UTF_8));
   var config=net.minecraft.client.renderer.PostChainConfig.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE,json).getOrThrow();
   var projection=new net.minecraft.client.renderer.Projection();projection.setupOrtho(0.1F,1000F,1F,1F,false);

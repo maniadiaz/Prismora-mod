@@ -17,7 +17,10 @@ public final class PackLoader {
         if (Files.isDirectory(source)) {
             Path real = source.toRealPath();
             try (var paths = Files.walk(source)) {
-                for (Path path : paths.toList()) {
+                var iterator=paths.iterator();int visited=0;
+                while(iterator.hasNext()) {
+                    Path path=iterator.next();
+                    if(++visited>MAX_ENTRIES*2)throw new IOException("Too many directory entries");
                     if (Files.isSymbolicLink(path) || !path.toRealPath().startsWith(real)) throw new IOException("External link in pack");
                     if (Files.isRegularFile(path)) {
                         String name = source.relativize(path).toString().replace('\\', '/');
@@ -46,8 +49,21 @@ public final class PackLoader {
             if (name.isBlank() || name.length() > 100) throw new IOException("Invalid pack name");
             JsonArray passes = manifest.getAsJsonArray("passes");
             if (passes.isEmpty() || passes.size() > 16) throw new IOException("Expected 1 to 16 passes");
-            Set<String> targets = new HashSet<>(Set.of("sceneColor"));
+            Set<String> targets = new HashSet<>(Set.of("sceneColor", "sceneDepth"));
             Set<String> names = new HashSet<>();
+            if(manifest.has("targets")) {
+                JsonObject descriptors=manifest.getAsJsonObject("targets");
+                if(descriptors.size()>16)throw new IOException("Too many targets");
+                for(var descriptor:descriptors.entrySet()) {
+                    if(!descriptor.getKey().matches("[a-z][a-z0-9_]*") || descriptor.getKey().equals("screen"))throw new IOException("Invalid target name");
+                    var options=descriptor.getValue().getAsJsonObject();
+                    for(String dimension:List.of("width","height")) if(options.has(dimension)) {
+                        double size=options.get(dimension).getAsDouble();
+                        if(size!=Math.rint(size)||size<1||size>4096)throw new IOException("Target dimension must be 1..4096");
+                    }
+                    if(options.has("persistent") && options.get("persistent").getAsBoolean())throw new IOException("Persistent targets are not supported in format 1");
+                }
+            }
             for (var value : passes) {
                 JsonObject pass = value.getAsJsonObject();
                 String passName = pass.get("name").getAsString();
@@ -57,12 +73,13 @@ public final class PackLoader {
                     if (!shader.matches("shaders/[a-z0-9_/]+\\.(vsh|fsh)") || !files.containsKey(shader)) throw new IOException("Missing or invalid shader: " + shader);
                 }
                 String output = pass.get("output").getAsString();
+                if(output.equals("screen") && value!=passes.get(passes.size()-1))throw new IOException("Only the last pass can output to screen");
                 if (!output.matches("screen|[a-z][a-z0-9_]*")) throw new IOException("Invalid output");
                 var inputs = pass.getAsJsonObject("inputs");
                 if (inputs == null || inputs.size() == 0 || inputs.size() > 8) throw new IOException("Expected 1 to 8 inputs");
                 for (var input : inputs.entrySet()) {
                     String target = input.getValue().getAsString();
-                    if (!input.getKey().matches("[A-Za-z][A-Za-z0-9_]*") || !targets.contains(target)) throw new IOException("Invalid sampler or forward target: " + target);
+                    if ((!input.getKey().matches("[A-Za-z][A-Za-z0-9_]*") || input.getKey().equals("PrismoraData")) || !targets.contains(target)) throw new IOException("Invalid sampler or forward target: " + target);
                     if (target.equals(output)) throw new IOException("Input/output feedback; use an intermediate target");
                 }
                 if (!output.equals("screen")) targets.add(output);

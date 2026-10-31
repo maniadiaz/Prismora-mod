@@ -1,0 +1,41 @@
+{
+  "formatVersion": 1,
+  "name": "Prismora Multipass Diagnostic",
+  "version": "1.0.0",
+  "dynamicUniforms": true,
+  "targets": {
+    "color0": {
+      "width": 256,
+      "height": 256
+    }
+  },
+  "passes": [
+    {
+      "name": "seed",
+      "vertex": "shaders/post.vsh",
+      "fragment": "shaders/seed.fsh",
+      "inputs": {
+        "SceneColor": "sceneColor"
+      },
+      "output": "color0"
+    },
+    {
+      "name": "double",
+      "vertex": "shaders/post.vsh",
+      "fragment": "shaders/double.fsh",
+      "inputs": {
+        "SceneColor": "color0"
+      },
+      "output": "color1"
+    },
+    {
+      "name": "final",
+      "vertex": "shaders/post.vsh",
+      "fragment": "shaders/copy.fsh",
+      "inputs": {
+        "SceneColor": "color1"
+      },
+      "output": "screen"
+    }
+  ]
+}

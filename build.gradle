@@ -27,6 +27,7 @@ minecraft {
             systemProperty 'prismora.smoke', providers.gradleProperty('prismoraSmoke').getOrElse('false')
             systemProperty 'prismora.uiSmoke', providers.gradleProperty('prismoraUiSmoke').getOrElse('false')
             systemProperty 'prismora.renderSmoke', providers.gradleProperty('prismoraRenderSmoke').getOrElse('false')
+            systemProperty 'prismora.smokePack', providers.gradleProperty('prismoraSmokePack').getOrElse('Prismora-Diagnostic')
             systemProperty 'forge.enabledGameTestNamespaces', 'prismora'
         }
 

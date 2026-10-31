@@ -1,0 +1,53 @@
+{
+  "formatVersion": 1,
+  "name": "Prismora Bloom",
+  "version": "1.0.0",
+  "dynamicUniforms": true,
+  "passes": [
+    {
+      "name": "bright",
+      "vertex": "shaders/post.vsh",
+      "fragment": "shaders/bright.fsh",
+      "inputs": {
+        "SceneColor": "sceneColor"
+      },
+      "output": "bright"
+    },
+    {
+      "name": "horizontal",
+      "vertex": "shaders/post.vsh",
+      "fragment": "shaders/blur_x.fsh",
+      "inputs": {
+        "SceneColor": "bright"
+      },
+      "output": "blur"
+    },
+    {
+      "name": "vertical",
+      "vertex": "shaders/post.vsh",
+      "fragment": "shaders/blur_y.fsh",
+      "inputs": {
+        "SceneColor": "blur"
+      },
+      "output": "glow"
+    },
+    {
+      "name": "composite",
+      "vertex": "shaders/post.vsh",
+      "fragment": "shaders/composite.fsh",
+      "inputs": {
+        "SceneColor": "sceneColor",
+        "Bloom": "glow"
+      },
+      "output": "screen",
+      "uniforms": {
+        "BloomOptions": [
+          {
+            "type": "float",
+            "value": 0.35
+          }
+        ]
+      }
+    }
+  ]
+}

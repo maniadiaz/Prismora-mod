@@ -12,6 +12,24 @@ import net.minecraft.util.ARGB;
 final class RenderSmokeProbe {
  private static int ticks,worldTicks,state;
  private static boolean sampled;
+ private static com.mojang.blaze3d.systems.TimerQuery timer;
+ private static String timerLabel;
+ private static final java.util.Map<String,java.util.List<Long>> gpu=new java.util.HashMap<>();
+ static void frameStart(){
+  if(timer==null)timer=new com.mojang.blaze3d.systems.TimerQuery();
+  if(timer.getStatus()==com.mojang.blaze3d.systems.TimerQuery.Status.NOT_RECORDING){
+   if(timerLabel!=null && timer.get()>0)gpu.computeIfAbsent(timerLabel,k->new java.util.ArrayList<>()).add(timer.get());
+   timerLabel=null;
+   if(state==1 && worldTicks>30)timerLabel="vanilla";
+   if(state==6 && !ShaderController.INSTANCE.busy() && worldTicks>20)timerLabel="bloom";
+   if(timerLabel!=null)timer.beginProfile();
+  }
+ }
+ static void frameEnd(){if(timer!=null && timer.getStatus()==com.mojang.blaze3d.systems.TimerQuery.Status.STARTED)timer.endProfile();}
+ private static void reportGpu(){
+  gpu.forEach((name,samples)->{samples.sort(Long::compare);Prismora.LOGGER.info("PRISMORA_GPU_BENCH: {} median={} ms samples={}",name,samples.get(samples.size()/2)/1e6,samples.size());});
+  if(timer!=null){timer.close();timer=null;}
+ }
  static void tick() {
   Minecraft mc=Minecraft.getInstance();ticks++;
   if(ticks>6000)throw new IllegalStateException("Render smoke timed out");
@@ -24,7 +42,7 @@ final class RenderSmokeProbe {
   if(mc.level==null || mc.player==null)return;
   if(state==1 && ++worldTicks>80) {
    var controller=ShaderController.INSTANCE;controller.refresh();
-   var entry=controller.entries().stream().filter(e->e.id().equals("Prismora-Diagnostic")).findFirst().orElseThrow();
+   var entry=controller.entries().stream().filter(e->e.id().equals(System.getProperty("prismora.smokePack","Prismora-Diagnostic"))).findFirst().orElseThrow();
    controller.select(entry);state=2;worldTicks=0;
   }
   if(state==2 && !ShaderController.INSTANCE.busy() && ++worldTicks>60) {
@@ -54,7 +72,22 @@ final class RenderSmokeProbe {
    if(ShaderController.INSTANCE.error().isEmpty())throw new IllegalStateException("Expected visible shader error");
    if(mc.getResourcePackRepository().getSelectedIds().contains("prismora/active"))throw new IllegalStateException("Invalid shader remained active");
    Prismora.LOGGER.info("PRISMORA_ERROR_RECOVERY_PASS: invalid GLSL reported, disabled, game still running");
-   mc.stop();state=6;
+   var bloom=ShaderController.INSTANCE.entries().stream().filter(e->e.id().equals("Prismora-Bloom")).findFirst().orElseThrow();
+   ShaderController.INSTANCE.select(bloom);state=6;worldTicks=0;
   }
+  if(state==6 && !ShaderController.INSTANCE.busy() && ++worldTicks>80) {
+   if(!ShaderController.INSTANCE.error().isEmpty())throw new IllegalStateException(ShaderController.INSTANCE.error());
+   state=7;sampled=false;
+   Screenshot.takeScreenshot(mc.gameRenderer.mainRenderTarget(),image->{
+    try(image){
+     int first=image.getPixel(image.getWidth()/4,image.getHeight()/4);int last=image.getPixel(image.getWidth()*3/4,image.getHeight()*3/4);
+     if(first==last)throw new IllegalStateException("Bloom output unexpectedly uniform");
+     try{image.writeToFile(mc.gameDirectory.toPath().resolve("prismora-bloom.png"));}catch(java.io.IOException e){throw new RuntimeException(e);}
+     Prismora.LOGGER.info("PRISMORA_BLOOM_PASS: four-pass shader applied, nonuniform world image verified");sampled=true;
+    }
+   });
+  }
+  if(state==7 && sampled){ShaderController.INSTANCE.select(null);state=8;}
+  if(state==8 && !ShaderController.INSTANCE.busy()){reportGpu();mc.stop();state=9;}
  }
 }

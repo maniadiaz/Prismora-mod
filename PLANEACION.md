@@ -119,11 +119,11 @@ Cierre: efecto visible y reversible dentro del mundo, sin reiniciar el juego; re
 
 ### Etapa 3 — Múltiples pasadas
 
-- [ ] Implementar targets propios y encadenamiento declarado en el manifiesto.
-- [ ] Validar referencias, orden, ciclos y accesos incompatibles a texturas.
-- [ ] Definir uniforms de resolución y tiempo; incorporar hora del mundo, cámara y sol cuando la API permita obtenerlos correctamente.
-- [ ] Manejar cambios de tamaño, entrada y salida del mundo y liberación de GPU.
-- [ ] Añadir un ejemplo de varias pasadas, como bloom con desenfoque.
+- [x] Implementar targets propios y encadenamiento declarado en el manifiesto.
+- [x] Validar referencias, orden, ciclos y accesos incompatibles a texturas.
+- [x] Definir uniforms de resolución y tiempo; incorporar hora del mundo, cámara y sol cuando la API permita obtenerlos correctamente.
+- [x] Manejar cambios de tamaño, entrada y salida del mundo y liberación de GPU.
+- [x] Añadir un ejemplo de varias pasadas, como bloom con desenfoque.
 
 Cierre: cadena validada, resultado visual correcto y medición de coste de GPU/memoria frente a vanilla.
 

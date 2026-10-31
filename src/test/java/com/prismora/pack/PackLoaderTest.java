@@ -46,5 +46,11 @@ class PackLoaderTest {
         pack(); Files.createDirectory(temp.resolve("broken"));
         var entries=new ShaderPackManager(temp).scan(); assertEquals(2, entries.size()); assertEquals(1,entries.stream().filter(ShaderPackManager.Entry::valid).count());
     }
+    @Test void loadsMultipassAndRejectsCyclesAndOversizedTargets() throws Exception {
+        assertEquals(3,new PackLoader().load(Path.of("examples/Prismora-Multipass")).manifest().getAsJsonArray("passes").size());
+        Path p=pack();Path m=p.resolve("pack.json");String original=Files.readString(m);
+        Files.writeString(m,original.replace("\"passes\"", "\"targets\":{\"huge\":{\"width\":99999}},\"passes\""));assertThrows(IOException.class,()->new PackLoader().load(p));
+        Files.writeString(m,original.replace("\"sceneColor\"","\"cycle\"").replace("\"screen\"","\"cycle\""));assertThrows(IOException.class,()->new PackLoader().load(p));
+    }
     @Test void validatesPaths() { for(String s : new String[]{"/absolute", "a/../b", "C:/file", "a\\b", "a//b"}) assertThrows(IOException.class,()->PackLoader.safePath(s)); }
 }
