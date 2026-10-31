@@ -1,5 +1,7 @@
 # Prismora: plan completo
 
+> Para la implementación específica y la entrega verificable de Complementary, seguir [PLAN_COMPLEMENTARY_100.md](planeacion/PLAN_COMPLEMENTARY_100.md). Este documento conserva el diseño general anterior; sus afirmaciones temporales deben verificarse antes de usarlas.
+
 Cargador de shaderpacks para Minecraft Java, hecho desde cero, con interfaz gráfica en el menú del juego. Permite usar shaderpacks de otras personas (formato OptiFine/Iris) y aplicarlos al mundo.
 
 | | |

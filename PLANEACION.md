@@ -197,4 +197,4 @@ Perfiles Entrada/Baja/Media/Alta, escala de postproceso, bloom opcional, sliders
 
 ## Continuación del plan de compatibilidad
 
-El seguimiento vigente de los siete puntos solicitados está en docs/IMPLEMENTACION_COMPATIBILIDAD.md. El cierre como investigación de la etapa 4 del plan inicial no cuenta como implementación de geometría/sombras del nuevo alcance. Se han añadido lectura y menús legacy, ejecución composite/final, profundidad flotante y captura de matrices; el render de packs con gbuffers, materiales, MRT y sombras sigue pendiente.
+La planeación vigente para ejecutar Complementary completo está en [docs/planeacion/PLAN_COMPLEMENTARY_100.md](docs/planeacion/PLAN_COMPLEMENTARY_100.md), con sus 16 etapas y criterios de entrega. El estado implementado de los siete puntos solicitados está en docs/IMPLEMENTACION_COMPATIBILIDAD.md. El cierre como investigación de la etapa 4 del plan inicial no cuenta como implementación de geometría/sombras del nuevo alcance. Se han añadido lectura y menús legacy, ejecución composite/final, profundidad flotante y captura de matrices; el render de packs con gbuffers, materiales, MRT y sombras sigue pendiente.
