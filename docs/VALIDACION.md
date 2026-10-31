@@ -44,3 +44,9 @@ Prototipar un pack de recursos interno de prioridad alta y solo presente cuando 
 - Bloom: extracción de brillo, desenfoque horizontal, vertical y composición; cuatro pasadas de pack más copia final segura. Ambos backends compilan y producen una imagen de mundo no uniforme (`PRISMORA_BLOOM_PASS`); captura inspeccionada visualmente.
 - Resolución de prueba: 854x480. Bloom mantiene cuatro targets privados: estimación nominal 12.5 MiB a 8 bytes/píxel entre color y profundidad, más 64 bytes de datos dinámicos; excluye pool de recursos y overhead del driver. Esta cifra es un cálculo, no una lectura de VRAM.
 - El probe usa `TimerQuery` de Mojang entre RenderTick.Pre/Post para medir el render completo y reporta medianas con `PRISMORA_GPU_BENCH`. La generación/carga de chunks y el estado del mundo afectan las medidas; no son garantías de rendimiento ni aíslan el tiempo exclusivo del shader.
+
+## Separación de servidor y geometría
+
+- `runServer`: Forge informa que omite el mod por `clientSideOnly` antes de iniciar Minecraft; no carga las clases de cliente. El proceso termina correctamente en la comprobación de EULA. No se aceptó la EULA ni se arrancó un mundo dedicado; la prueba demuestra exclusión del mod en ese entorno.
+- Probe de geometría: ejecutado dentro del frame graph con target de color/profundidad y estado de cámara. Limitaciones y decisión detalladas en `GEOMETRIA.md`.
+- Medición exploratoria OpenGL a 854x480: mediana del render completo 0.813 ms vanilla (266 muestras), 0.643 ms bloom (351). La sesión carga chunks al inicio: la diferencia no permite atribuir coste incremental al bloom y no indica que acelere el juego. Memoria nominal de targets calculada en la sección anterior.

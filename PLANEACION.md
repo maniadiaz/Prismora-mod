@@ -85,13 +85,13 @@ No prometer bloom completo con una sola pasada. La entrega inicial puede usar co
 
 ### Etapa 0 — Base e investigación
 
-- [ ] Incorporar MDK oficial, Wrapper, toolchain y versiones fijadas.
-- [ ] Configurar identidad, metadatos y separación de cliente.
-- [ ] Compilar y arrancar el cliente de desarrollo.
-- [ ] Verificar comportamiento en servidor dedicado: no cargar código de cliente ni provocar fallos por su ausencia.
-- [ ] Inspeccionar fuentes y registrar firmas y puntos de integración reales.
-- [ ] Prototipar `end_of_frame` con un efecto mínimo y evaluar selección, recarga y conflicto con otro pack que lo defina.
-- [ ] Investigar tempranamente la viabilidad de interceptar geometría y sombras; registrar límites sin ampliar esta etapa a una implementación completa.
+- [x] Incorporar MDK oficial, Wrapper, toolchain y versiones fijadas.
+- [x] Configurar identidad, metadatos y separación de cliente.
+- [x] Compilar y arrancar el cliente de desarrollo.
+- [x] Verificar comportamiento en servidor dedicado: no cargar código de cliente ni provocar fallos por su ausencia.
+- [x] Inspeccionar fuentes y registrar firmas y puntos de integración reales.
+- [x] Prototipar `end_of_frame` con un efecto mínimo y evaluar selección, recarga y conflicto con otro pack que lo defina.
+- [x] Investigar tempranamente la viabilidad de interceptar geometría y sombras; registrar límites sin ampliar esta etapa a una implementación completa.
 
 Cierre: build reproducible, evidencia del arranque y documento de decisiones de render. Si una prueba no puede ejecutarse, registrarla como pendiente; no marcar la etapa completa.
 
@@ -129,8 +129,10 @@ Cierre: cadena validada, resultado visual correcto y medición de coste de GPU/m
 
 ### Etapa 4 — Geometría y sombras, condicionada a viabilidad
 
-- [ ] Revisar el prototipo y las restricciones detectadas en la etapa 0.
-- [ ] Priorizar eventos o extensiones estables; justificar y aislar cualquier mixin necesario.
+Resultado: investigación y prototipo ejecutados; se conserva postproceso. G-buffer y sombras no implementados: véase `docs/GEOMETRIA.md`.
+
+- [x] Revisar el prototipo y las restricciones detectadas en la etapa 0.
+- [x] Priorizar eventos o extensiones estables; justificar y aislar cualquier mixin necesario.
 - [ ] Prototipar un G-buffer limitado antes de abarcar terreno, entidades y agua.
 - [ ] Implementar mapa de sombras y luego filtrado de sombras si la integración es viable.
 - [ ] Incorporar agua, nubes y cielo como incrementos separados.
