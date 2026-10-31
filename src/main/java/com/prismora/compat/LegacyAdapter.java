@@ -35,6 +35,7 @@ public final class LegacyAdapter {
    var pass=new JsonObject();pass.addProperty("name",name);pass.addProperty("vertex",stem+".vsh");pass.addProperty("fragment",stem+".fsh");var inputs=new JsonObject();
    for(String sampler:translated.samplers()){
     if(Set.of("colortex0","gcolor","texture","tex").contains(sampler))inputs.addProperty(sampler,current);
+    else if(sampler.equals("depthtex0"))inputs.addProperty(sampler,"sceneDepth");
     else throw new IOException(program.fragment()+": unsupported post sampler "+sampler+"; an explicit attachment/depth/texture bridge is required");
    }
    // A pass with no samplers is legal (e.g. a diagnostic constant color).

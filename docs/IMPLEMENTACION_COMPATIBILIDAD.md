@@ -62,3 +62,9 @@ Validación local: 60 pruebas unitarias; pruebas de desarrollo OpenGL/Vulkan y J
 El controlador recompila un pack legacy cuando cambia la dimensión del mundo activo, sin sustituir sus opciones persistentes. El fixture añade world-1/final.fsh y la prueba del JAR viaja Overworld → Nether → Overworld: exige el color específico del Nether y la vuelta al color configurado del Overworld. Se completó en OpenGL y Vulkan. La lectura de píxeles final en Vulkan se toma junto al centro para evitar la mira y la viñeta periférica.
 
 Resumen verificable de esta ampliación: docs/pruebas/RESULTADOS-LEGACY.json. Última compilación: 61 pruebas unitarias, cero fallos/errores. Estas pruebas siguen sin implementar geometría o sombras.
+
+## Profundidad legacy
+
+El puente composite/final admite depthtex0 con lectura directa del buffer flotante real de Minecraft. Convierte reverse-Z al muestrear (near=0/far=1), sin textura intermedia RGBA8. Admite texture/texture2D, textureLod/texture2DLod y texelFetch con el sampler explícito; los usos indirectos/offset y el muestreo en vértices se rechazan por ahora. depthtex1/2 y shadowtex no se sustituyen por depthtex0: representan etapas diferentes aún pendientes.
+
+El fixture verifica en GPU que la profundidad es finita, está en [0,1] y suma 1 con la muestra original reverse-Z con tolerancia 1e-6. Se repiten opciones, viaje entre dimensiones y error de include con el JAR en OpenGL y Vulkan. Esta conexión no constituye un G-buffer ni un mapa de sombras.

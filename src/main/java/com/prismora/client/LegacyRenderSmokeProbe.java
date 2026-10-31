@@ -20,7 +20,7 @@ public final class LegacyRenderSmokeProbe {
   if(state==1&&++wait>80){controller.refresh();controller.select(controller.entries().stream().filter(e->e.id().equals("PostFixture")).findFirst().orElseThrow());state=9;wait=0;}
   if(state==9&&!controller.busy()&&mc.gui.overlay()==null){controller.applyLegacyOptions("PostFixture",Map.of("GAIN","true","EXPOSURE","2.0"));state=2;wait=0;}
   if(state==2&&!controller.busy()&&mc.gui.overlay()==null&&++wait>60){checkError();captured=false;capture(51,204,102,"PRISMORA_LEGACY_GPU_PASS");state=3;}
-  if(state==3&&captured){controller.applyLegacyOptions("PostFixture",Map.of("GAIN","false","EXPOSURE","1.0"));state=4;wait=0;}
+  if(state==3&&captured){Prismora.LOGGER.info("PRISMORA_LEGACY_DEPTH_PASS: normalized depth matches original floating-point reverse-Z attachment");controller.applyLegacyOptions("PostFixture",Map.of("GAIN","false","EXPOSURE","1.0"));state=4;wait=0;}
   if(state==4&&!controller.busy()&&mc.gui.overlay()==null&&++wait>60){checkError();captured=false;capture(26,102,51,"PRISMORA_LEGACY_OPTIONS_PASS");state=5;}
   if(state==5&&captured){mc.player.connection.sendCommand("execute in minecraft:the_nether run tp @s 0 100 0");state=10;wait=0;}
   if(state==10&&mc.level.dimension().identifier().toString().equals("minecraft:the_nether")&&!controller.busy()&&mc.gui.overlay()==null&&++wait>100){checkError();captured=false;capture(51,77,204,"PRISMORA_LEGACY_NETHER_PASS");state=11;}

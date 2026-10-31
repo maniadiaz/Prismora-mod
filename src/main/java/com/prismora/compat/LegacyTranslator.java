@@ -43,6 +43,18 @@ public final class LegacyTranslator {
    source=replaceCode(source,"\\bgl_(?:ModelViewProjectionMatrix|ModelViewMatrix|ProjectionMatrix)\\b","mat4(1.0)");
    source=replaceCode(source,"\\bgl_TextureMatrix\\s*\\[\\s*0\\s*]","mat4(1.0)");
   }
+  String depthHelpers="";
+  if(samplers.contains("depthtex0")){
+   if(vertex)throw new IOException("Vertex depth sampling requires an additional geometry contract");
+   // Convert at the sampling site, retaining the original floating-point depth attachment.
+   // A color intermediate would quantize most far geometry to 1.0 in RGBA8.
+   source=replaceCode(source,"\\b(?:texture2D|texture)\\s*\\(\\s*depthtex0\\s*,","prismoraDepth(depthtex0,");
+   source=replaceCode(source,"\\b(?:texture2DLod|textureLod)\\s*\\(\\s*depthtex0\\s*,","prismoraDepthLod(depthtex0,");
+   source=replaceCode(source,"\\btexelFetch\\s*\\(\\s*depthtex0\\s*,","prismoraDepthFetch(depthtex0,");
+   String remaining=mask(source).replaceAll("prismoraDepth(?:Lod|Fetch)?\\s*\\(\\s*depthtex0\\s*,","");
+   if(Pattern.compile("\\bdepthtex0\\b").matcher(remaining).find())throw new IOException("Unsupported indirect/offset depthtex0 sampling contract");
+   depthHelpers="vec4 prismoraDepth(sampler2D s,vec2 uv){return vec4(vec3(1.0-texture(s,uv).r),1.0);}\nvec4 prismoraDepth(sampler2D s,vec2 uv,float bias){return vec4(vec3(1.0-texture(s,uv,bias).r),1.0);}\nvec4 prismoraDepthLod(sampler2D s,vec2 uv,float lod){return vec4(vec3(1.0-textureLod(s,uv,lod).r),1.0);}\nvec4 prismoraDepthFetch(sampler2D s,ivec2 p,int lod){return vec4(vec3(1.0-texelFetch(s,p,lod).r),1.0);}\n";
+  }
   source=replaceCode(source,"\\btexture2D\\b","texture");source=replaceCode(source,"\\btexture2DLod\\b","textureLod");source=replaceCode(source,"\\btexture2DGradARB\\b","textureGrad");
   var outputs=new StringBuilder();
   if(!vertex){
@@ -55,7 +67,7 @@ public final class LegacyTranslator {
   }
   String quad=vertex?"vec2 prismoraQuadUv(){ return vec2(float((gl_VertexIndex<<1)&2),float(gl_VertexIndex&2)); }\n":"";
   String include=dynamic[0]?"#include \"prismora:uniforms.glsl\"\n":"";
-  return "#version 330\n#extension GL_ARB_separate_shader_objects : require\n"+include+macros+outputs+quad+source;
+  return "#version 330\n#extension GL_ARB_separate_shader_objects : require\n"+include+macros+outputs+quad+depthHelpers+source;
  }
  private static String apply(String source,List<Edit> edits){edits.sort(Comparator.comparingInt(Edit::start).reversed());var text=new StringBuilder(source);for(var edit:edits)text.replace(edit.start(),edit.end(),edit.replacement());return text.toString();}
  private static String replaceCode(String source,String regex,String replacement){var matcher=Pattern.compile(regex).matcher(mask(source));var edits=new ArrayList<Edit>();while(matcher.find())edits.add(new Edit(matcher.start(),matcher.end(),replacement));return apply(source,edits);}
