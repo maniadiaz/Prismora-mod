@@ -56,6 +56,11 @@ public final class PackCompiler {
    if(output.equals("screen"))passes.add(copy(outputId,"minecraft:main"));
   }
   resources.put("assets/prismora/shaders/copy.fsh",("#version 330\n#extension GL_ARB_separate_shader_objects : require\nuniform sampler2D InSampler;\nlayout(location=0) in vec2 texCoord;\nlayout(location=0) out vec4 fragColor;\nvoid main(){ fragColor=texture(InSampler,texCoord); }\n").getBytes(StandardCharsets.UTF_8));
+  if(width>0 && height>0){
+   long bytes=0;for(var entry:targets.entrySet()){var size=entry.getValue().getAsJsonObject();bytes+=(long)size.get("width").getAsInt()*size.get("height").getAsInt()*8;}
+   long budgetMiB=switch(settings.profile()){case ENTRY->64;case LOW->96;case MEDIUM,CUSTOM->192;case HIGH->384;};
+   if(bytes>budgetMiB*1024*1024)throw new IllegalArgumentException("Shader targets exceed profile budget of "+budgetMiB+" MiB; reduce shader scale or pack complexity");
+  }
   chain.add("targets",targets);chain.add("passes",passes);
   resources.put("assets/minecraft/post_effect/end_of_frame.json",chain.toString().getBytes(StandardCharsets.UTF_8));
   resources.put("pack.mcmeta","{\"pack\":{\"description\":\"Prismora active shaderpack\",\"min_format\":[97,1],\"max_format\":[97,1]}}".getBytes(StandardCharsets.UTF_8));

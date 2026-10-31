@@ -4,7 +4,7 @@ Push-Location -LiteralPath $projectRoot
 try {
     & .\gradlew.bat build --console=plain
     if($LASTEXITCODE -ne 0){throw 'Build or tests failed'}
-    $version='0.1.0'
+    $version='0.2.0'
     $dist=Join-Path $projectRoot 'dist'
     $staging=Join-Path $projectRoot ('.gradle/distribution/'+[guid]::NewGuid().ToString())
     New-Item -ItemType Directory -Force $dist,$staging,(Join-Path $staging 'shaderpacks'),(Join-Path $staging 'docs') | Out-Null

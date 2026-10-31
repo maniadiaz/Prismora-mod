@@ -12,7 +12,7 @@ public final class AdaptivePerformance {
  public static void beforeFrame(){
   if(closed)return;
   var mc=Minecraft.getInstance();var shaders=ShaderController.INSTANCE;
-  boolean eligible=mc.level!=null && mc.player!=null && mc.gui.screen()==null && mc.gui.overlay()==null && !shaders.busy() && !shaders.suspended() && !shaders.selected().isEmpty() && shaders.effectivePerformance().adaptive();
+  boolean eligible=mc.isWindowActive() && mc.getFramerateLimitTracker().getThrottleReason()==com.mojang.blaze3d.platform.FramerateLimitTracker.FramerateThrottleReason.NONE && mc.level!=null && mc.player!=null && mc.gui.screen()==null && mc.gui.overlay()==null && !shaders.busy() && !shaders.suspended() && !shaders.selected().isEmpty() && shaders.effectivePerformance().adaptive();
   if(!eligible){if(active)reset();active=false;if(!shaders.effectivePerformance().adaptive() && timer!=null){timer.close();timer=null;}return;}
   long now=System.nanoTime();if(!active){reset();active=true;}double interval=lastFrame==0?0:(now-lastFrame)/1e6;lastFrame=now;
   if(timer==null)timer=new TimerQuery();

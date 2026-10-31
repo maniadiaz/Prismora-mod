@@ -21,5 +21,6 @@
   "prismora.fallback": "Vanilla fallback",
   "prismora.apply": "Apply",
   "prismora.adapt.reduced": "Quality reduced to meet GPU budget",
-  "prismora.adapt.suspended": "Shader paused: target unmet; use Reload to resume"
+  "prismora.adapt.suspended": "Shader paused: target unmet; use Reload to resume",
+  "prismora.target.help": "Adaptive mode budget; does not cap game FPS. Scaling reduces postprocessing, not chunk rendering."
 }

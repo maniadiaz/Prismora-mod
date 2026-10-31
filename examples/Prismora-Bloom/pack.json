@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "name": "Prismora Bloom",
   "version": "1.0.0",
-  "dynamicUniforms": true,
+  "dynamicUniforms": false,
   "passes": [
     {
       "name": "bright",

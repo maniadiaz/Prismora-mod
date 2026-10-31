@@ -21,5 +21,6 @@
   "prismora.fallback": "Volver a vanilla",
   "prismora.apply": "Aplicar",
   "prismora.adapt.reduced": "Calidad reducida por presupuesto de GPU",
-  "prismora.adapt.suspended": "Shader pausado: no se cumple el objetivo; usa Recargar para reactivar"
+  "prismora.adapt.suspended": "Shader pausado: no se cumple el objetivo; usa Recargar para reactivar",
+  "prismora.target.help": "Presupuesto del modo adaptativo; no limita los FPS del juego. La escala reduce el postproceso, no el render de chunks."
 }

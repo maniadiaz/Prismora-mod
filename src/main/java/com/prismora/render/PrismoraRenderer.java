@@ -53,7 +53,7 @@ public final class PrismoraRenderer {
   Minecraft mc=Minecraft.getInstance();
   return mc.reloadResourcePacks().thenRunAsync(()->{
    if(pack==null){ready=true;inFlight=false;Uniforms.release();return;}
-   validateCurrent();ready=true;inFlight=false;
+   validateCurrent();if(!dynamicData)Uniforms.release();ready=true;inFlight=false;
    Prismora.LOGGER.info("PRISMORA_SHADER_READY: {}",pack.id());
   },mc);
  }

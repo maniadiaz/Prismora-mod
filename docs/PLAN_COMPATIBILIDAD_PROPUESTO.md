@@ -259,3 +259,14 @@ Cada fase tiene un entregable y un criterio de aceptación. No se pasa a la sigu
 3. Descompilar 26.3 y documentar las clases de render y compilación de shaders.
 4. Construir la Fase 1 completa (interfaz y gestión de packs).
 5. En paralelo, prototipar una pasada de pantalla completa para validar la Fase 4 lo antes posible.
+
+## 14. Calidad y rendimiento añadidos al plan
+
+- UI con perfiles Entrada/Baja/Media/Alta y configuración personalizada; opciones de pack con sliders, toggles y elecciones. Aplicación por lote y persistencia.
+- Objetivo de Entrada: presupuesto de frame de 33.33 ms (30 FPS) con menor resolución de postproceso, efectos opcionales eliminados y fallback a vanilla si la GPU sigue excediendo el presupuesto mínimo. Es una meta, no una garantía universal.
+- Calidad adaptativa con mediciones de GPU y frame, calentamiento, presión sostenida y cooldown. Ignorar AFK, ventanas inactivas, menús, recargas y límites aislados de CPU/VSync. Sin modificar preferencias de distancia de render o resolución del jugador.
+- Presupuestos nominales de buffers: Entrada 64 MiB, Baja 96 MiB, Media/Personalizado 192 MiB, Alta 384 MiB. Rechazo previo a asignación si el pack excede el presupuesto, con error visible; no son lecturas ni garantías de VRAM disponible.
+- Pruebas físicas separadas para GPU integrada/entrada, baja, media y alta a resoluciones declaradas; medir vanilla, tiempo GPU y percentiles de frame. No presentar cambiar un preset en RTX 5060 Ti como emulación de otra GPU.
+- Benchmarks reproducibles exportados a JSON con GPU, backend, resolución, límite de FPS y descarte de outliers. Verificar ambos backends y cada etapa en Git.
+
+Estado: esta ampliación se implementa en 0.2.0 sobre el postproceso existente. Las fases del documento relacionadas con formato OptiFine/Iris, traducción GLSL legacy, G-buffers y sombras todavía no se consideran implementadas ni verificadas por esta entrega.

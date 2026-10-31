@@ -5,7 +5,6 @@ layout(location=0) in vec2 texCoord;
 layout(location=0) out vec4 fragColor;
 uniform sampler2D BloomSampler;
 layout(std140) uniform BloomOptions { float Strength; };
-#include "prismora:uniforms.glsl"
 void main(){
  vec3 color=texture(SceneColorSampler,texCoord).rgb+texture(BloomSampler,texCoord).rgb*Strength;
  fragColor=vec4(clamp(color,0,1),1);

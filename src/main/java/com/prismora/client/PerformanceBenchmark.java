@@ -15,7 +15,7 @@ final class PerformanceBenchmark {
  static void begin(String name){label=name;frames.clear();gpu.clear();excluded=0;warmup=90;lastFrame=0;recording=true;}
  static boolean ready(){return frames.size()>=180;}
  static void beforeFrame(){
-  if(!recording)return;var mc=Minecraft.getInstance();if(mc.level==null||mc.gui.screen()!=null||mc.gui.overlay()!=null)return;
+  if(!recording)return;var mc=Minecraft.getInstance();mc.getFramerateLimitTracker().onInputReceived();if(mc.level==null||mc.gui.screen()!=null||mc.gui.overlay()!=null)return;
   long now=System.nanoTime();double dt=lastFrame==0?0:(now-lastFrame)/1e6;lastFrame=now;
   if(timer==null)timer=new TimerQuery();
   if(timer.getStatus()==TimerQuery.Status.NOT_RECORDING){
@@ -34,7 +34,7 @@ final class PerformanceBenchmark {
  }
  private static double percentile(List<Double> sorted,double p){return sorted.get(Math.min(sorted.size()-1,(int)Math.ceil(sorted.size()*p)-1));}
  static void save(){
-  var mc=Minecraft.getInstance();var device=RenderSystem.getDevice().getDeviceInfo();var report=new JsonObject();report.addProperty("modVersion",com.prismora.Prismora.class.getPackage().getImplementationVersion());report.addProperty("gpu",device.name());report.addProperty("backend",device.backendName());report.addProperty("driver",device.driverInfo());report.addProperty("os",System.getProperty("os.name"));report.addProperty("width",mc.getWindow().getWidth());report.addProperty("height",mc.getWindow().getHeight());report.addProperty("scope","Whole GameRenderer GPU time; wall frames include FPS caps. Profiles on one GPU are not tests of other GPU models. No synthetic load used in these measurements. Frame intervals outside 0.1..250 ms are excluded and counted separately.");report.add("profiles",rows);
+  var mc=Minecraft.getInstance();var device=RenderSystem.getDevice().getDeviceInfo();var report=new JsonObject();report.addProperty("modVersion",com.prismora.Prismora.class.getPackage().getImplementationVersion());report.addProperty("gpu",device.name());report.addProperty("inactivityThrottleSuppressed",true);report.addProperty("fpsLimit",mc.getFramerateLimitTracker().getFramerateLimit());report.addProperty("windowFocused",mc.isWindowActive());report.addProperty("backend",device.backendName());report.addProperty("driver",device.driverInfo());report.addProperty("os",System.getProperty("os.name"));report.addProperty("width",mc.getWindow().getWidth());report.addProperty("height",mc.getWindow().getHeight());report.addProperty("scope","Whole GameRenderer GPU time; wall frames include FPS caps. Profiles on one GPU are not tests of other GPU models. No synthetic load used in these measurements. Frame intervals outside 0.1..250 ms are excluded and counted separately.");report.add("profiles",rows);
   try{Files.writeString(mc.gameDirectory.toPath().resolve("prismora-performance-report.json"),new GsonBuilder().setPrettyPrinting().create().toJson(report));}catch(java.io.IOException e){throw new RuntimeException(e);}
   if(timer!=null){timer.close();timer=null;}
  }

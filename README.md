@@ -60,7 +60,7 @@ En **Opciones** del pack hay sliders, interruptores y listas de valores cuando e
 
 Las pruebas de cliente abren Minecraft y un mundo local de prueba, activan efectos, leen píxeles de GPU, fuerzan un error de GLSL, verifican opciones y recarga automática y cierran el juego. Usan `run/` o `.gradle/packaged-smoke/run/`, no tu instalación habitual. No ejecutes dos probes simultáneamente sobre el mismo directorio.
 
-GitHub Actions compila y ejecuta las pruebas unitarias en cada push y pull request. Las pruebas de GPU se ejecutan localmente con los scripts; CI no demuestra compatibilidad de render.
+GitHub Actions compila y ejecuta las pruebas unitarias en Windows y Linux en cada push y pull request. Las pruebas de GPU se ejecutan localmente con los scripts; CI no demuestra compatibilidad de render.
 
 El JAR se genera en `build/libs/`; la distribución en `dist/`. Los scripts comprueban marcadores de éxito y el backend efectivo para detectar fallback. [Resultados y límites de pruebas](docs/VALIDACION.md).
 
