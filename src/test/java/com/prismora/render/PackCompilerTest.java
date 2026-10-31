@@ -6,6 +6,14 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 class PackCompilerTest {
+ @Test void everyExampleMatchesVanillaPostChainCodec()throws Exception{
+  try(var examples=Files.list(Path.of("examples"))){for(var folder:examples.toList()){
+   var resources=new PackCompiler().compile(new PackLoader().load(folder));
+   var json=JsonParser.parseString(new String(resources.get("assets/minecraft/post_effect/end_of_frame.json"),StandardCharsets.UTF_8));
+   var parsed=net.minecraft.client.renderer.PostChainConfig.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE,json);
+   assertTrue(parsed.isSuccess(),folder+": "+parsed.error());
+  }}
+ }
  @Test void preservesTargetsAndDynamicInputs() throws Exception {
   var result=new PackCompiler().compile(new PackLoader().load(Path.of("examples/Prismora-Multipass")));
   var chain=JsonParser.parseString(new String(result.get("assets/minecraft/post_effect/end_of_frame.json"),StandardCharsets.UTF_8)).getAsJsonObject();

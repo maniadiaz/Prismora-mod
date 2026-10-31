@@ -11,9 +11,12 @@ public final class ShaderPackScreen extends Screen {
  private final Screen parent;
  private final ShaderController controller=ShaderController.INSTANCE;
  private int page;
+ private String previousState="";
  public ShaderPackScreen(Screen parent) { super(Component.translatable("prismora.title"));this.parent=parent; }
  @Override protected void init() {
   int left=width/2-150;
+  var optionsButton=Button.builder(Component.translatable("prismora.options"),b->minecraft.gui.setScreen(new ShaderOptionsScreen(this))).bounds(width-108,8,100,20).build();
+  optionsButton.active=!controller.busy() && !controller.options().isEmpty();addRenderableWidget(optionsButton);
   int pageSize=Math.max(1,(height-160)/24);
   int pages=Math.max(1,(controller.entries().size()+pageSize-1)/pageSize);
   page=Math.min(page,pages-1);
@@ -32,6 +35,7 @@ public final class ShaderPackScreen extends Screen {
   addRenderableWidget(Button.builder(Component.translatable("prismora.folder"),b->Blaze3D.openPath(controller.manager().directory())).bounds(left,height-58,146,20).build());
   addRenderableWidget(Button.builder(Component.translatable("gui.done"),b->onClose()).bounds(left+154,height-58,146,20).build());
  }
+ @Override public void tick(){String state=controller.selected()+controller.busy()+controller.error()+controller.generation();if(!state.equals(previousState)){previousState=state;rebuildWidgets();}}
  @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float partial) {
   super.extractRenderState(graphics,x,y,partial);
   graphics.centeredText(font,title,width/2,15,0xFFFFFFFF);

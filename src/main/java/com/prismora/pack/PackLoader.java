@@ -44,7 +44,7 @@ public final class PackLoader {
             byte[] metadata = files.get("pack.json");
             if (metadata == null || metadata.length > 65536) throw new IOException("Missing or oversized pack.json");
             JsonObject manifest = JsonParser.parseString(new String(metadata, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
-            if (manifest.get("formatVersion").getAsInt() != 1) throw new IOException("Unsupported formatVersion");
+            if (manifest.get("formatVersion").getAsDouble() != 1) throw new IOException("Unsupported formatVersion");
             String name = manifest.get("name").getAsString();
             if (name.isBlank() || name.length() > 100) throw new IOException("Invalid pack name");
             JsonArray passes = manifest.getAsJsonArray("passes");
@@ -70,7 +70,7 @@ public final class PackLoader {
                 if (!passName.matches("[a-z0-9_]+") || !names.add(passName)) throw new IOException("Invalid or repeated pass name");
                 for (String stage : List.of("vertex", "fragment")) {
                     String shader = pass.get(stage).getAsString(); safePath(shader);
-                    if (!shader.matches("shaders/[a-z0-9_/]+\\.(vsh|fsh)") || !files.containsKey(shader)) throw new IOException("Missing or invalid shader: " + shader);
+                    if (!(stage.equals("vertex")?shader.endsWith(".vsh"):shader.endsWith(".fsh")) || !shader.matches("shaders/[a-z0-9_/]+\\.(vsh|fsh)") || !files.containsKey(shader)) throw new IOException("Missing or invalid shader: " + shader);
                 }
                 String output = pass.get("output").getAsString();
                 if(output.equals("screen") && value!=passes.get(passes.size()-1))throw new IOException("Only the last pass can output to screen");
@@ -85,6 +85,7 @@ public final class PackLoader {
                 if (!output.equals("screen")) targets.add(output);
             }
             if (!passes.get(passes.size()-1).getAsJsonObject().get("output").getAsString().equals("screen")) throw new IOException("Last pass must output to screen");
+            PackOptions.read(manifest);
             return new ShaderPack(source.getFileName().toString(), name, manifest, Collections.unmodifiableMap(files));
         } catch (RuntimeException e) { throw new IOException("Invalid pack.json: " + e.getMessage(), e); }
     }

@@ -27,6 +27,7 @@ minecraft {
             systemProperty 'prismora.smoke', providers.gradleProperty('prismoraSmoke').getOrElse('false')
             systemProperty 'prismora.uiSmoke', providers.gradleProperty('prismoraUiSmoke').getOrElse('false')
             systemProperty 'prismora.renderSmoke', providers.gradleProperty('prismoraRenderSmoke').getOrElse('false')
+            systemProperty 'prismora.expectedStartup', providers.gradleProperty('prismoraExpectedStartup').getOrElse('')
             systemProperty 'prismora.geometryProbe', providers.gradleProperty('prismoraGeometryProbe').getOrElse('false')
             systemProperty 'prismora.smokePack', providers.gradleProperty('prismoraSmokePack').getOrElse('Prismora-Diagnostic')
             systemProperty 'forge.enabledGameTestNamespaces', 'prismora'
@@ -73,3 +74,11 @@ dependencies {
 }
 test { useJUnitPlatform() }
 
+
+tasks.withType(Jar).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    from('LICENSE.md')
+    from('docs/third-party/Forge-MDK-LICENSE.txt') { into 'META-INF/licenses' }
+    manifest { attributes 'Implementation-Version': project.version }
+}

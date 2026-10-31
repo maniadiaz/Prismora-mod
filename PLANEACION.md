@@ -141,11 +141,12 @@ Cierre: alcance demostrado con pruebas visuales y rendimiento medido. Si la API 
 
 ### Etapa 5 — Pulido y distribución
 
-- [ ] Completar recarga en caliente y opciones por pack según el formato definido.
-- [ ] Ejecutar matriz OpenGL/Vulkan, cambios de resolución, reinicios y errores de packs.
-- [ ] Documentar instalación, creación de packs, requisitos e incompatibilidades comprobadas.
-- [ ] Elegir licencia y revisar permisos de los recursos incluidos.
-- [ ] Preparar artefactos, changelog y publicación en Modrinth/CurseForge.
+- [x] Completar recarga en caliente y opciones por pack según el formato definido.
+- [x] Ejecutar matriz OpenGL/Vulkan, cambios de resolución, reinicios y errores de packs.
+- [x] Documentar instalación, creación de packs, requisitos e incompatibilidades comprobadas.
+- [ ] Confirmar licencia de publicación con el titular. Los avisos originales del MDK están conservados y el código propio mantiene All Rights Reserved.
+- [x] Preparar artefactos, changelog y verificar el JAR en instalación aislada.
+- [ ] Publicar en Modrinth/CurseForge: requiere cuentas/proyectos y datos de publicación del titular.
 
 Cierre: artefacto instalable probado fuera del entorno de desarrollo y documentación coherente con las capacidades realmente verificadas. La publicación en plataformas se gestiona como entrega separada de los pushes a Git.
 
@@ -183,3 +184,8 @@ Al preparar esta planeación se encontró el repositorio vacío y Java 25 instal
 ## Avance de implementación
 
 Base y selección subidas a Git. Postproceso validado en cliente real con OpenGL y Vulkan, lectura de píxeles, desactivación y recuperación de GLSL inválido. Véase `docs/VALIDACION.md`. Etapas restantes en curso; no implica publicación en plataformas.
+
+
+### Estado de esta entrega
+
+Etapas 0–3 implementadas y verificadas. Etapa 4 cerrada como investigación con limitación documentada; no se han implementado G-buffer ni sombras solares. Etapa 5 incluye opciones, recarga automática, matriz de render, pruebas del JAR y distribución local; publicación externa y decisión final de licencia pendientes. Véanse README.md, docs/VALIDACION.md y docs/PUBLICACION.md.

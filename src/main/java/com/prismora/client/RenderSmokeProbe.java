@@ -10,12 +10,13 @@ import net.minecraft.util.ARGB;
 
 /** Real world, ShaderC, GPU readback and disable integration test. */
 final class RenderSmokeProbe {
- private static int ticks,worldTicks,state;
+ private static int ticks,worldTicks,state,priorGeneration;
  private static boolean sampled;
  private static com.mojang.blaze3d.systems.TimerQuery timer;
  private static String timerLabel;
  private static final java.util.Map<String,java.util.List<Long>> gpu=new java.util.HashMap<>();
  static void frameStart(){
+  if(state>=13)return;
   if(timer==null)timer=new com.mojang.blaze3d.systems.TimerQuery();
   if(timer.getStatus()==com.mojang.blaze3d.systems.TimerQuery.Status.NOT_RECORDING){
    if(timerLabel!=null && timer.get()>0)gpu.computeIfAbsent(timerLabel,k->new java.util.ArrayList<>()).add(timer.get());
@@ -40,6 +41,11 @@ final class RenderSmokeProbe {
    else mc.createWorldOpenFlows().createFreshLevel(id,new LevelSettings(id,GameType.CREATIVE,LevelSettings.DifficultySettings.DEFAULT,true,WorldDataConfiguration.DEFAULT),new WorldOptions(1234L,false,false),WorldPresets::createNormalWorldDimensions,new TitleScreen());
   }
   if(mc.level==null || mc.player==null)return;
+  if(state==1 && worldTicks==30 && !System.getProperty("prismora.expectedStartup","").isEmpty()){
+   if(!ShaderController.INSTANCE.selected().equals(System.getProperty("prismora.expectedStartup")))throw new IllegalStateException("Startup selection not restored");
+   if(!mc.gameRenderer.getAppliedPostEffects().contains(net.minecraft.resources.Identifier.withDefaultNamespace("end_of_frame")))throw new IllegalStateException("Restored effect not applied");
+   Prismora.LOGGER.info("PRISMORA_RESTORE_PASS: saved selection restored on fresh client startup");
+  }
   if(state==1 && ++worldTicks>80) {
    var controller=ShaderController.INSTANCE;controller.refresh();
    var entry=controller.entries().stream().filter(e->e.id().equals(System.getProperty("prismora.smokePack","Prismora-Diagnostic"))).findFirst().orElseThrow();
@@ -87,7 +93,34 @@ final class RenderSmokeProbe {
     }
    });
   }
-  if(state==7 && sampled){ShaderController.INSTANCE.select(null);state=8;}
-  if(state==8 && !ShaderController.INSTANCE.busy()){reportGpu();mc.stop();state=9;}
+  if(state==7 && sampled){
+   var option=ShaderController.INSTANCE.options().stream().filter(o->o.id().equals("bloom_strength")).findFirst().orElseThrow();
+   ShaderController.INSTANCE.setOption(option,0.15);state=8;
+  }
+  if(state==8 && !ShaderController.INSTANCE.busy()){
+   try{
+    var config=new com.prismora.client.config.PrismoraConfig(mc.gameDirectory.toPath().resolve("config/prismora.json"));config.load();
+    if(Math.abs(config.options("Prismora-Bloom").get("bloom_strength")-0.15)>0.0001)throw new IllegalStateException("Option did not persist");
+   }catch(java.io.IOException e){throw new RuntimeException(e);}
+   Prismora.LOGGER.info("PRISMORA_OPTIONS_PASS: bloom strength persisted and recompiled");
+   mc.gui.setScreen(new com.prismora.client.gui.ShaderOptionsScreen(new com.prismora.client.gui.ShaderPackScreen(null)));state=9;worldTicks=0;
+  }
+  if(state==9 && mc.gui.overlay()==null && ++worldTicks>40){
+   Screenshot.grab(mc.gameDirectory,"prismora-options.png",mc.gameRenderer.mainRenderTarget(),1,message->{});
+   mc.gui.setScreen(null);priorGeneration=ShaderController.INSTANCE.generation();
+   try{java.nio.file.Files.writeString(mc.gameDirectory.toPath().resolve("shaderpacks/Prismora-Bloom/shaders/composite.fsh"),"\n// Smoke hot reload\n",java.nio.file.StandardOpenOption.APPEND);}catch(java.io.IOException e){throw new RuntimeException(e);}
+   state=10;
+  }
+  if(state==10 && ShaderController.INSTANCE.generation()>priorGeneration && !ShaderController.INSTANCE.busy()){
+   if(!ShaderController.INSTANCE.error().isEmpty())throw new IllegalStateException(ShaderController.INSTANCE.error());
+   Prismora.LOGGER.info("PRISMORA_HOT_RELOAD_PASS: shader edit detected and recompiled");mc.getWindow().setWindowed(960,540);state=11;worldTicks=0;
+  }
+  if(state==11 && mc.gui.overlay()==null && ++worldTicks>40){
+   if(mc.gameRenderer.mainRenderTarget().width!=960 || mc.gameRenderer.mainRenderTarget().height!=540)throw new IllegalStateException("Render target did not resize");
+   if(!mc.gameRenderer.getAppliedPostEffects().contains(net.minecraft.resources.Identifier.withDefaultNamespace("end_of_frame")))throw new IllegalStateException("Effect lost on resize");
+   Prismora.LOGGER.info("PRISMORA_RESIZE_PASS: 960x540 render target and active effect verified");
+   mc.getWindow().setWindowed(854,480);ShaderController.INSTANCE.select(null);state=12;
+  }
+  if(state==12 && !ShaderController.INSTANCE.busy()){reportGpu();mc.stop();state=13;}
  }
 }

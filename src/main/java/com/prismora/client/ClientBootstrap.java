@@ -19,6 +19,7 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = Prismora.MOD_ID, value = Dist.CLIENT)
 public final class ClientBootstrap {
     @SubscribeEvent public static void beforeFrame(TickEvent.RenderTickEvent.Pre event) { com.prismora.render.PrismoraRenderer.beforeFrame(); if(Boolean.getBoolean("prismora.renderSmoke"))RenderSmokeProbe.frameStart(); }
+    @SubscribeEvent public static void shutdown(net.minecraftforge.event.GameShuttingDownEvent event) { ShaderController.INSTANCE.close(); }
     @SubscribeEvent public static void afterFrame(TickEvent.RenderTickEvent.Post event) { if(Boolean.getBoolean("prismora.renderSmoke"))RenderSmokeProbe.frameEnd(); }
     @SubscribeEvent public static void packs(net.minecraftforge.event.AddPackFindersEvent event) {
         if(event.getPackType()==net.minecraft.server.packs.PackType.CLIENT_RESOURCES) event.addRepositorySource(com.prismora.render.PrismoraRenderer::provide);
@@ -34,6 +35,7 @@ public final class ClientBootstrap {
     @SubscribeEvent
     public static void tick(TickEvent.ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
+        if(mc.isGameLoadFinished())ShaderController.INSTANCE.tick();
         while (OPEN.consumeClick()) if (mc.gui.screen() == null) mc.gui.setScreen(new ShaderPackScreen(null));
     }
 }

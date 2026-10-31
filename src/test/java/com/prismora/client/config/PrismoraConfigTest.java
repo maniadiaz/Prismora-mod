@@ -11,5 +11,10 @@ class PrismoraConfigTest {
   var next=new PrismoraConfig(file);next.load();assertEquals("demo.zip",next.selected());next.select("");
   var disabled=new PrismoraConfig(file);disabled.load();assertEquals("",disabled.selected());
  }
+ @Test void optionsSurviveRestartIndependentlyOfSelection()throws Exception{
+  Path file=temp.resolve("options.json");var config=new PrismoraConfig(file);config.select("bloom");config.setOption("bloom","bloom_strength",0.15);config.select("");
+  var restarted=new PrismoraConfig(file);restarted.load();assertEquals(0.15,restarted.options("bloom").get("bloom_strength"));assertTrue(restarted.options("other").isEmpty());
+ }
+ @Test void rejectsDriveRelativeSelection(){assertThrows(IOException.class,()->new PrismoraConfig(temp.resolve("config")).select("C:"));}
  @Test void rejectsExternalSelection() { assertThrows(IOException.class,()->new PrismoraConfig(temp.resolve("config")).select("../pack")); }
 }

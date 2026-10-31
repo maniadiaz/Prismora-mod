@@ -13,10 +13,13 @@ public final class ShaderPackManager {
         Files.createDirectories(directory);
         List<Entry> result = new ArrayList<>();
         try (var paths = Files.list(directory)) {
-            for (Path path : paths.sorted().limit(257).toList()) {
+            var candidates=paths.limit(1025).toList();
+            if(candidates.size()>1024)throw new IOException("Too many shaderpack directory entries");
+            for (Path path : candidates.stream().sorted().toList()) {
                 if (result.size() == 256) throw new IOException("Too many shaderpacks (limit 256)");
                 if (!Files.isDirectory(path) && !path.toString().toLowerCase(Locale.ROOT).endsWith(".zip")) continue;
                 try {
+                    if(!path.toRealPath().startsWith(directory.toRealPath()))throw new IOException("External pack link");
                     var pack = new PackLoader().load(path);
                     result.add(new Entry(pack.id(), pack.name(), pack, ""));
                 } catch (IOException e) { result.add(new Entry(path.getFileName().toString(), path.getFileName().toString(), null, e.getMessage())); }

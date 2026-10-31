@@ -20,7 +20,7 @@ public final class PrismoraRenderer {
   try {
    var root=Minecraft.getInstance().gameDirectory.toPath();
    var config=new com.prismora.client.config.PrismoraConfig(root.resolve("config/prismora.json"));config.load();
-   if(!config.selected().isEmpty()) active=new PackCompiler().compile(new PackLoader().load(root.resolve("shaderpacks").resolve(config.selected())));
+   if(!config.selected().isEmpty()) active=new PackCompiler().compile(com.prismora.pack.PackOptions.apply(new PackLoader().load(root.resolve("shaderpacks").resolve(config.selected())),config.options(config.selected())));
   } catch(Exception e) { Prismora.LOGGER.error("Cannot restore selected shaderpack",e);active=Map.of(); }
  }
  public static void provide(Consumer<Pack> consumer) {
@@ -36,8 +36,9 @@ public final class PrismoraRenderer {
   consumer.accept(new Pack(location,supplier,metadata,new PackSelectionConfig(true,Pack.Position.TOP,true)));
  }
  public static CompletableFuture<Void> activate(PackLoader.ShaderPack pack) {
-  initialized=true;ready=false;inFlight=true;
-  active=pack==null?Map.of():new PackCompiler().compile(pack);
+  Map<String,byte[]> compiled;
+  try{compiled=pack==null?Map.of():new PackCompiler().compile(pack);}catch(RuntimeException e){return CompletableFuture.failedFuture(e);}
+  initialized=true;ready=false;inFlight=true;active=compiled;
   Minecraft mc=Minecraft.getInstance();
   return mc.reloadResourcePacks().thenRunAsync(()->{
    if(pack==null){ready=true;inFlight=false;Uniforms.release();return;}
@@ -53,7 +54,7 @@ public final class PrismoraRenderer {
    catch(Exception e) {
     com.prismora.client.ShaderController.INSTANCE.fail(e);
     inFlight=true;
-    mc.execute(()->com.prismora.client.ShaderController.INSTANCE.select(null));
+    mc.execute(()->com.prismora.client.ShaderController.INSTANCE.recover(e));
    }
   }
   if(!ready && (inFlight || !active.isEmpty())) mc.gameRenderer.gameRenderState().requestedPostEffects.remove(Identifier.withDefaultNamespace("end_of_frame"));

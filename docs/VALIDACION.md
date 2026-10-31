@@ -50,3 +50,15 @@ Prototipar un pack de recursos interno de prioridad alta y solo presente cuando 
 - `runServer`: Forge informa que omite el mod por `clientSideOnly` antes de iniciar Minecraft; no carga las clases de cliente. El proceso termina correctamente en la comprobación de EULA. No se aceptó la EULA ni se arrancó un mundo dedicado; la prueba demuestra exclusión del mod en ese entorno.
 - Probe de geometría: ejecutado dentro del frame graph con target de color/profundidad y estado de cámara. Limitaciones y decisión detalladas en `GEOMETRIA.md`.
 - Medición exploratoria OpenGL a 854x480: mediana del render completo 0.813 ms vanilla (266 muestras), 0.643 ms bloom (351). La sesión carga chunks al inicio: la diferencia no permite atribuir coste incremental al bloom y no indica que acelere el juego. Memoria nominal de targets calculada en la sección anterior.
+
+## Verificación final de la entrega 0.1.0
+
+- 21 pruebas JUnit, cero fallos, errores u omisiones. Incluyen el codec real de PostChainConfig para todos los ejemplos, opciones, persistencia y observación de archivos, además de las pruebas anteriores.
+- JAR en instalación aislada sin fuentes del mod: OpenGL y Vulkan efectivos, NVIDIA GeForce RTX 5060 Ti, Windows 11. Ambos completan restauración de selección al arrancar, lectura de GPU, múltiples pasadas, error de GLSL y recuperación, bloom, opciones persistentes, recarga automática y cambio a 960x540 con efecto activo.
+- Se encontró y corrigió una carrera al salir: el último tick podía consultar un WatchService cerrado. La prueba de regresión verifica que consultar/cerrar de nuevo sea seguro; ambos clientes empaquetados cierran limpiamente.
+- Los scripts verifican el backend efectivo. Un fallo del script de prueba al escribir opciones sin versión/BOM se corrigió; no se acepta fallback OpenGL como prueba de Vulkan.
+- `docs/pruebas/RESULTADOS.json` conserva el resumen de pruebas y marcadores, sin versionar los mundos ni logs completos.
+- GitHub Actions incluye build y tests unitarios en cada push/PR; su estado remoto debe consultarse en GitHub. Los probes de GPU se ejecutan localmente y no se atribuyen a CI.
+- Publicación en plataformas no ejecutada. Código original con All Rights Reserved y avisos del MDK conservados; la elección definitiva de licencia corresponde al titular.
+
+- Integración final de UI: botón real de Ajustes de vídeo invocado y pantalla de Prismora abierta; tecla configurable registrada una sola vez. Se renderizaron 125 frames de la pantalla antes de regresar al menú y cerrar. Capturas inspeccionadas en `docs/screenshots/`.

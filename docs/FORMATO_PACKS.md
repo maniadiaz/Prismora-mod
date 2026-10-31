@@ -39,3 +39,21 @@ Límites: manifiesto 64 KiB, archivo 1 MiB, contenido total 16 MiB, 256 archivos
 Mientras está activo, el pack interno de Prismora tiene prioridad sobre otros packs que definan `minecraft:end_of_frame`. No combina esos efectos automáticamente. Al desactivar se retira ese pack; otros efectos de jugador/espectador siguen gestionados por vanilla.
 
 Los errores de carga o compilación se muestran en la pantalla de Prismora; los detalles se consultan en el botón de errores y `logs/latest.log`. Ante compilación fallida se desactiva el shader. Los packs OptiFine/Iris no se convierten automáticamente.
+
+## Opciones por pack
+
+`options` es un objeto de hasta 16 parámetros float. Cada clave usa minúsculas y guiones bajos (máximo 40 caracteres). Ejemplo:
+
+```json
+"options": {
+  "bloom_strength": {
+    "label": "Bloom strength",
+    "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.35,
+    "pass": "composite", "block": "BloomOptions", "index": 0
+  }
+}
+```
+
+El destino debe ser un uniform float existente en el bloque indicado. La pantalla Opciones incrementa el valor por `step` y vuelve a `min` al superar `max`; se guarda por nombre de archivo/carpeta de pack y se recompila. Los valores guardados fuera de rango se acotan al aplicar. La etiqueta pertenece al pack; el resto de la interfaz tiene traducciones español/inglés.
+
+La recarga automática observa el directorio raíz y los subdirectorios del pack seleccionado, agrupa eventos durante 600 ms y reemplaza la instantánea de recursos completa. No deja abiertos los ZIP.

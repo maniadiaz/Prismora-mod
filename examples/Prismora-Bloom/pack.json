@@ -49,5 +49,17 @@
         ]
       }
     }
-  ]
+  ],
+  "options": {
+    "bloom_strength": {
+      "label": "Bloom strength",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.05,
+      "default": 0.35,
+      "pass": "composite",
+      "block": "BloomOptions",
+      "index": 0
+    }
+  }
 }

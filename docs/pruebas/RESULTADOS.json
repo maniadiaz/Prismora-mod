@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-30",
+  "minecraft": "26.3",
+  "forge": "66.1.0",
+  "java": "25",
+  "hardware": "NVIDIA GeForce RTX 5060 Ti / Windows 11",
+  "unitTests": {
+    "tests": 21,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "packagedClients": {
+    "opengl": {
+      "passed": true,
+      "markers": {
+        "RESTORE": true,
+        "GPU": true,
+        "RENDER_SMOKE": true,
+        "ERROR_RECOVERY": true,
+        "BLOOM": true,
+        "OPTIONS": true,
+        "HOT_RELOAD": true,
+        "RESIZE": true
+      },
+      "measurements": [
+        "[18:51:35] [Render thread/INFO] [co.pr.Prismora/]: PRISMORA_GPU_BENCH: bloom median=0.662549 ms samples=351",
+        "[18:51:35] [Render thread/INFO] [co.pr.Prismora/]: PRISMORA_GPU_BENCH: vanilla median=0.964138 ms samples=290"
+      ]
+    },
+    "vulkan": {
+      "passed": true,
+      "markers": {
+        "RESTORE": true,
+        "GPU": true,
+        "RENDER_SMOKE": true,
+        "ERROR_RECOVERY": true,
+        "BLOOM": true,
+        "OPTIONS": true,
+        "HOT_RELOAD": true,
+        "RESIZE": true
+      },
+      "measurements": [
+        "[18:52:51] [Render thread/INFO] [co.pr.Prismora/]: PRISMORA_GPU_BENCH: bloom median=0.142133 ms samples=352",
+        "[18:52:51] [Render thread/INFO] [co.pr.Prismora/]: PRISMORA_GPU_BENCH: vanilla median=0.143082 ms samples=293"
+      ]
+    }
+  }
+}

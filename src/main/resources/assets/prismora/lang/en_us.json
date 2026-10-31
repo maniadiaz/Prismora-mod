@@ -6,5 +6,6 @@
   "key.prismora.open": "Open Prismora",
   "prismora.loading": "Loading shaders...",
   "prismora.active": "Selection: ",
-  "prismora.errors": "Error details"
+  "prismora.errors": "Error details",
+  "prismora.options": "Options"
 }
