@@ -25,6 +25,7 @@ minecraft {
 
             systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
             systemProperty 'prismora.smoke', providers.gradleProperty('prismoraSmoke').getOrElse('false')
+            systemProperty 'prismora.uiSmoke', providers.gradleProperty('prismoraUiSmoke').getOrElse('false')
             systemProperty 'forge.enabledGameTestNamespaces', 'prismora'
         }
 

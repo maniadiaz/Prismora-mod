@@ -1,0 +1,8 @@
+{
+  "prismora.title": "Prismora Shaders",
+  "prismora.disable": "Disable",
+  "prismora.reload": "Reload",
+  "prismora.folder": "Open folder",
+  "prismora.selection_only": "Selection saved; rendering pending implementation",
+  "key.prismora.open": "Open Prismora"
+}

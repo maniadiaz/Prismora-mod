@@ -11,15 +11,22 @@ import net.minecraftforge.fml.common.Mod;
 /** Opt-in real-client probe; disabled in normal play. */
 @Mod.EventBusSubscriber(modid=Prismora.MOD_ID,value=Dist.CLIENT)
 public final class SmokeProbe {
- private static int ticks,frames;
+ private static int ticks,frames,uiFrames;
  @SubscribeEvent public static void frame(ScreenEvent.Render.Post event) {
   if(Boolean.getBoolean("prismora.smoke")) frames++;
+  if(Boolean.getBoolean("prismora.uiSmoke") && event.getScreen() instanceof com.prismora.client.gui.ShaderPackScreen) uiFrames++;
  }
  @SubscribeEvent public static void tick(TickEvent.ClientTickEvent.Post event) {
   if(!Boolean.getBoolean("prismora.smoke")) return;
   Minecraft mc=Minecraft.getInstance();
   if(mc.gui.screen()==null) return;
   if(++ticks==60) mc.gui.setScreen(new TitleScreen());
+  if(Boolean.getBoolean("prismora.uiSmoke") && ticks==80) mc.gui.setScreen(new com.prismora.client.gui.ShaderPackScreen(new TitleScreen()));
+  if(Boolean.getBoolean("prismora.uiSmoke") && ticks==140) {
+   if(uiFrames<10) throw new IllegalStateException("Prismora UI did not render");
+   Prismora.LOGGER.info("PRISMORA_UI_PASS: {} rendered shader selection frames",uiFrames);
+   mc.gui.setScreen(new TitleScreen());
+  }
   if(ticks>=160 && mc.gui.screen() instanceof TitleScreen && frames>=30) {
    Prismora.LOGGER.info("PRISMORA_SMOKE_PASS: title screen, {} ticks, {} rendered frames",ticks,frames);
    mc.stop();

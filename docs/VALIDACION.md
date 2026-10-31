@@ -20,3 +20,9 @@
 ## Decisión provisional
 
 Prototipar un pack de recursos interno de prioridad alta y solo presente cuando el shader está activo. `end_of_frame` es un recurso único: otro pack que lo defina no se combina automáticamente. Prismora debe documentar esta precedencia y al desactivar retirar su pack. Las pruebas de compilación, aplicación en mundo, recarga y backends siguen pendientes al crear esta base.
+
+## Interfaz y packs
+
+- Build y 10 pruebas JUnit correctos (8 de packs y 2 de configuración).
+- Cliente real con '-PprismoraSmoke=true -PprismoraUiSmoke=true': 134 frames de la pantalla de Prismora, regreso al menú y cierre limpio.
+- Los botones muestran selección persistente; el render se integra en la siguiente entrega.

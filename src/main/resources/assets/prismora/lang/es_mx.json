@@ -1,0 +1,8 @@
+{
+  "prismora.title": "Shaders de Prismora",
+  "prismora.disable": "Desactivar",
+  "prismora.reload": "Recargar",
+  "prismora.folder": "Abrir carpeta",
+  "prismora.selection_only": "Selecci\u00f3n guardada; render pendiente de implementaci\u00f3n",
+  "key.prismora.open": "Abrir Prismora"
+}

@@ -1,0 +1,86 @@
+package com.prismora.pack;
+
+import com.google.gson.*;
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.zip.*;
+
+/** Bounded snapshot: no open ZIP handles or unvalidated paths survive loading. */
+public final class PackLoader {
+    public static final int MAX_FILE = 1024 * 1024, MAX_TOTAL = 16 * MAX_FILE, MAX_ENTRIES = 256;
+    public record ShaderPack(String id, String name, JsonObject manifest, Map<String, byte[]> files) {}
+
+    public ShaderPack load(Path source) throws IOException {
+        Map<String, byte[]> files = new TreeMap<>();
+        if (Files.isSymbolicLink(source)) throw new IOException("Pack links are not supported");
+        if (Files.isDirectory(source)) {
+            Path real = source.toRealPath();
+            try (var paths = Files.walk(source)) {
+                for (Path path : paths.toList()) {
+                    if (Files.isSymbolicLink(path) || !path.toRealPath().startsWith(real)) throw new IOException("External link in pack");
+                    if (Files.isRegularFile(path)) {
+                        String name = source.relativize(path).toString().replace('\\', '/');
+                        try (var in = Files.newInputStream(path)) { add(files, name, in); }
+                    }
+                }
+            }
+        } else {
+            try (ZipFile zip = new ZipFile(source.toFile())) {
+                var entries = zip.entries();
+                int count = 0;
+                while (entries.hasMoreElements()) {
+                    var e = entries.nextElement();
+                    if (++count > MAX_ENTRIES) throw new IOException("Too many ZIP entries");
+                    safePath(e.isDirectory() ? e.getName().replaceAll("/$", "") : e.getName());
+                    if (!e.isDirectory()) try (var in = zip.getInputStream(e)) { add(files, e.getName(), in); }
+                }
+            }
+        }
+        try {
+            byte[] metadata = files.get("pack.json");
+            if (metadata == null || metadata.length > 65536) throw new IOException("Missing or oversized pack.json");
+            JsonObject manifest = JsonParser.parseString(new String(metadata, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            if (manifest.get("formatVersion").getAsInt() != 1) throw new IOException("Unsupported formatVersion");
+            String name = manifest.get("name").getAsString();
+            if (name.isBlank() || name.length() > 100) throw new IOException("Invalid pack name");
+            JsonArray passes = manifest.getAsJsonArray("passes");
+            if (passes.isEmpty() || passes.size() > 16) throw new IOException("Expected 1 to 16 passes");
+            Set<String> targets = new HashSet<>(Set.of("sceneColor"));
+            Set<String> names = new HashSet<>();
+            for (var value : passes) {
+                JsonObject pass = value.getAsJsonObject();
+                String passName = pass.get("name").getAsString();
+                if (!passName.matches("[a-z0-9_]+") || !names.add(passName)) throw new IOException("Invalid or repeated pass name");
+                for (String stage : List.of("vertex", "fragment")) {
+                    String shader = pass.get(stage).getAsString(); safePath(shader);
+                    if (!shader.matches("shaders/[a-z0-9_/]+\\.(vsh|fsh)") || !files.containsKey(shader)) throw new IOException("Missing or invalid shader: " + shader);
+                }
+                String output = pass.get("output").getAsString();
+                if (!output.matches("screen|[a-z][a-z0-9_]*")) throw new IOException("Invalid output");
+                var inputs = pass.getAsJsonObject("inputs");
+                if (inputs == null || inputs.size() == 0 || inputs.size() > 8) throw new IOException("Expected 1 to 8 inputs");
+                for (var input : inputs.entrySet()) {
+                    String target = input.getValue().getAsString();
+                    if (!input.getKey().matches("[A-Za-z][A-Za-z0-9_]*") || !targets.contains(target)) throw new IOException("Invalid sampler or forward target: " + target);
+                    if (target.equals(output)) throw new IOException("Input/output feedback; use an intermediate target");
+                }
+                if (!output.equals("screen")) targets.add(output);
+            }
+            if (!passes.get(passes.size()-1).getAsJsonObject().get("output").getAsString().equals("screen")) throw new IOException("Last pass must output to screen");
+            return new ShaderPack(source.getFileName().toString(), name, manifest, Collections.unmodifiableMap(files));
+        } catch (RuntimeException e) { throw new IOException("Invalid pack.json: " + e.getMessage(), e); }
+    }
+
+    public static void safePath(String name) throws IOException {
+        if (name.isEmpty() || name.length() > 240 || name.startsWith("/") || name.contains("\\") || name.contains(":")) throw new IOException("Unsafe path: " + name);
+        for (String part : name.split("/", -1)) if (part.isEmpty() || part.equals(".") || part.equals("..")) throw new IOException("Unsafe path: " + name);
+    }
+    private static void add(Map<String, byte[]> files, String name, InputStream in) throws IOException {
+        safePath(name);
+        if (files.size() >= MAX_ENTRIES || files.containsKey(name) || files.keySet().stream().anyMatch(n -> n.equalsIgnoreCase(name))) throw new IOException("Too many or duplicate files");
+        byte[] bytes = in.readNBytes(MAX_FILE + 1);
+        if (bytes.length > MAX_FILE || files.values().stream().mapToInt(b -> b.length).sum() + bytes.length > MAX_TOTAL) throw new IOException("Pack exceeds size limit");
+        files.put(name, bytes);
+    }
+}
