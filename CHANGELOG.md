@@ -1,5 +1,12 @@
 # Changelog
 
+## En desarrollo — Compatibilidad legacy
+
+- Lector OptiFine/Iris, opciones y menús por pack, perfiles, traducciones y presets.
+- Preprocesado de includes/macros y traducción GLSL de postprocesado composite/final a ShaderC.
+- Errores con archivo/línea originales, cambios de opciones comprobados en GPU y selección de programas al viajar entre dimensiones.
+- Pruebas del JAR en OpenGL/Vulkan. Geometría, MRT, materiales y sombras continúan pendientes; Complementary tiene menú probado, todavía sin render compatible.
+
 ## 0.2.0 — Perfiles de calidad y rendimiento
 
 - Presets Entrada, Baja, Media y Alta; escala de postproceso y ajustes personalizados persistentes.

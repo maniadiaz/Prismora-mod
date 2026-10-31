@@ -56,3 +56,9 @@ Validación local: 60 pruebas unitarias; pruebas de desarrollo OpenGL/Vulkan y J
 - Etapas 4 y 5: integración real del mundo y mapa solar/lunar pendientes; el probe anterior no los implementa.
 - Etapa 6: JUnit y GPU local disponibles; faltan otras GPU, Linux con GPU y combinaciones de mods.
 - Etapa 7: preparación existente; el titular indicó que aún creará los proyectos Modrinth/CurseForge. No se ha publicado allí; se mantiene la licencia existente.
+
+## Viajes entre dimensiones
+
+El controlador recompila un pack legacy cuando cambia la dimensión del mundo activo, sin sustituir sus opciones persistentes. El fixture añade world-1/final.fsh y la prueba del JAR viaja Overworld → Nether → Overworld: exige el color específico del Nether y la vuelta al color configurado del Overworld. Se completó en OpenGL y Vulkan. La lectura de píxeles final en Vulkan se toma junto al centro para evitar la mira y la viñeta periférica.
+
+Resumen verificable de esta ampliación: docs/pruebas/RESULTADOS-LEGACY.json. Última compilación: 61 pruebas unitarias, cero fallos/errores. Estas pruebas siguen sin implementar geometría o sombras.

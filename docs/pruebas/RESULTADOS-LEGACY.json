@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-31",
+  "minecraft": "26.3",
+  "forge": "66.1.0",
+  "java": "25",
+  "os": "Windows 11",
+  "gpu": "NVIDIA GeForce RTX 5060 Ti",
+  "unitTests": 61,
+  "failures": 0,
+  "errors": 0,
+  "pack": "PostFixture, original test shader",
+  "runs": [
+    {
+      "backend": "opengl",
+      "mode": "installed JAR in isolated Forge client",
+      "passed": true,
+      "markers": [
+        "PRISMORA_LEGACY_GPU_PASS: ff32ca65",
+        "PRISMORA_LEGACY_OPTIONS_PASS: ff196633",
+        "PRISMORA_LEGACY_NETHER_PASS: ff324ac7",
+        "PRISMORA_LEGACY_DIMENSION_PASS: ff196432",
+        "PRISMORA_LEGACY_SOURCE_ERROR_PASS: original include filename and line reported; fallback active",
+        "PRISMORA_LEGACY_RENDER_SMOKE_PASS"
+      ],
+      "logSha256": "89656D550061B958101E7C3EC5FD0E4D06B496128E0D44D7544F60B8263AD440",
+      "sample": "one third of image"
+    },
+    {
+      "backend": "vulkan",
+      "mode": "installed JAR in isolated Forge client",
+      "passed": true,
+      "markers": [
+        "PRISMORA_LEGACY_GPU_PASS: ff32cc66",
+        "PRISMORA_LEGACY_OPTIONS_PASS: ff196633",
+        "PRISMORA_LEGACY_NETHER_PASS: ff334ccc",
+        "PRISMORA_LEGACY_DIMENSION_PASS: ff196633",
+        "PRISMORA_LEGACY_SOURCE_ERROR_PASS: original include filename and line reported; fallback active",
+        "PRISMORA_LEGACY_RENDER_SMOKE_PASS"
+      ],
+      "logSha256": "3CC67885FABB079720D9CB2A9D666BFA6A36FD3871380DCB761B6882B88B66EC",
+      "sample": "center + 20 pixels horizontally; avoids crosshair and peripheral vignette"
+    }
+  ],
+  "limitations": [
+    "Legacy postprocess subset only",
+    "Complementary menus tested separately; rendering not yet supported",
+    "No G-buffer/material/shadow bridge",
+    "No other GPU or Linux GPU validation",
+    "No guarantee of 30 FPS on entry-level hardware"
+  ]
+}

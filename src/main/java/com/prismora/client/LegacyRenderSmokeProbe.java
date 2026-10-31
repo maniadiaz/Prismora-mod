@@ -22,7 +22,11 @@ public final class LegacyRenderSmokeProbe {
   if(state==2&&!controller.busy()&&mc.gui.overlay()==null&&++wait>60){checkError();captured=false;capture(51,204,102,"PRISMORA_LEGACY_GPU_PASS");state=3;}
   if(state==3&&captured){controller.applyLegacyOptions("PostFixture",Map.of("GAIN","false","EXPOSURE","1.0"));state=4;wait=0;}
   if(state==4&&!controller.busy()&&mc.gui.overlay()==null&&++wait>60){checkError();captured=false;capture(26,102,51,"PRISMORA_LEGACY_OPTIONS_PASS");state=5;}
-  if(state==5&&captured){
+  if(state==5&&captured){mc.player.connection.sendCommand("execute in minecraft:the_nether run tp @s 0 100 0");state=10;wait=0;}
+  if(state==10&&mc.level.dimension().identifier().toString().equals("minecraft:the_nether")&&!controller.busy()&&mc.gui.overlay()==null&&++wait>100){checkError();captured=false;capture(51,77,204,"PRISMORA_LEGACY_NETHER_PASS");state=11;}
+  if(state==11&&captured){mc.player.connection.sendCommand("execute in minecraft:overworld run tp @s 0 100 0");state=12;wait=0;}
+  if(state==12&&mc.level.dimension().identifier().toString().equals("minecraft:overworld")&&!controller.busy()&&mc.gui.overlay()==null&&++wait>100){checkError();captured=false;capture(26,102,51,"PRISMORA_LEGACY_DIMENSION_PASS");state=13;}
+  if(state==13&&captured){
    try{Path file=mc.gameDirectory.toPath().resolve("shaderpacks/PostFixture/shaders/lib/color.glsl");original=Files.readAllBytes(file);Files.writeString(file,"vec3 applyGain(vec3 color){\nreturn DOES_NOT_EXIST;\n}\n");}catch(Exception e){throw new RuntimeException(e);}state=6;wait=0;
   }
   if(state==6&&!controller.busy()&&!controller.error().isEmpty()){
@@ -33,5 +37,5 @@ public final class LegacyRenderSmokeProbe {
   if(state==7&&++wait>20){Prismora.LOGGER.info("PRISMORA_LEGACY_RENDER_SMOKE_PASS");mc.stop();state=8;}
  }
  private static void checkError(){if(!ShaderController.INSTANCE.error().isEmpty())throw new IllegalStateException(ShaderController.INSTANCE.error());}
- private static void capture(int red,int green,int blue,String marker){var mc=Minecraft.getInstance();Screenshot.takeScreenshot(mc.gameRenderer.mainRenderTarget(),image->{try(image){int pixel=image.getPixel(image.getWidth()/3,image.getHeight()/3);if(Math.abs(ARGB.red(pixel)-red)>5||Math.abs(ARGB.green(pixel)-green)>5||Math.abs(ARGB.blue(pixel)-blue)>5)throw new IllegalStateException("Legacy pixel mismatch: "+Integer.toHexString(pixel));Prismora.LOGGER.info("{}: {}",marker,Integer.toHexString(pixel));captured=true;}});}
+ private static void capture(int red,int green,int blue,String marker){var mc=Minecraft.getInstance();Screenshot.takeScreenshot(mc.gameRenderer.mainRenderTarget(),image->{try(image){int pixel=image.getPixel(Math.min(image.getWidth()-1,image.getWidth()/2+20),image.getHeight()/2);if(Math.abs(ARGB.red(pixel)-red)>5||Math.abs(ARGB.green(pixel)-green)>5||Math.abs(ARGB.blue(pixel)-blue)>5)throw new IllegalStateException("Legacy pixel mismatch: "+Integer.toHexString(pixel));Prismora.LOGGER.info("{}: {}",marker,Integer.toHexString(pixel));captured=true;}});}
 }

@@ -42,7 +42,7 @@ En **Opciones** del pack hay sliders, interruptores y listas de valores cuando e
 
 - Probado en OpenGL y Vulkan en el equipo de desarrollo NVIDIA; el resultado en otros equipos necesita su propia validación.
 - Usa abstracciones de GPU y postproceso de Mojang, sin llamadas OpenGL directas.
-- Formato propio: no carga packs OptiFine/Iris sin adaptación.
+- Formato propio y subset de postprocesado legacy. El lector y los menús OptiFine/Iris ya están implementados; el render de packs con geometría, MRT o sombras sigue pendiente. Consulta [la matriz de compatibilidad](docs/compat-matrix.md).
 - El pack activo tiene prioridad sobre otros recursos `minecraft:end_of_frame`; no combina automáticamente esos efectos. Al desactivarlo se retira el pack interno.
 - No incluye G-buffer por material ni sombras solares, ni sustituye el render de agua, cielo o nubes. [Investigación de geometría](docs/GEOMETRIA.md).
 - El código original no tiene una licencia abierta elegida; conserva todos los derechos. Los archivos de Forge conservan sus licencias originales.

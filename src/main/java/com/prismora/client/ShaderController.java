@@ -26,6 +26,7 @@ public final class ShaderController {
     public void applyLegacyOptions(String id,Map<String,String> values){if(busy||closed)return;try{var pack=legacyInspected();if(pack==null||!pack.id().equals(id))throw new IOException("Shaderpack changed; reopen options");config.legacyOptions(id,pack.validated(values));var entry=entries.stream().filter(e->e.id().equals(id)).findFirst().orElseThrow();select(entry);}catch(Exception e){fail(e);}}
 
     private boolean busy;
+    private String activeDimension="";
     private PackWatcher watcher;
     private int generation;
     private int lastWidth,lastHeight;private long resizeAt;
@@ -76,8 +77,9 @@ public final class ShaderController {
         busy=true;error="";
         java.util.concurrent.CompletableFuture<Void> activation;
         try{
+            activeDimension=com.prismora.render.PrismoraRenderer.dimensionName();
             var pack=entry==null?null:entry.pack();
-            if(com.prismora.compat.LegacyPack.isLegacy(pack))pack=com.prismora.compat.LegacyAdapter.prepare(pack,config.legacyOptions(entry.id()),com.prismora.render.PrismoraRenderer.dimensionName());
+            if(com.prismora.compat.LegacyPack.isLegacy(pack)){pack=com.prismora.compat.LegacyAdapter.prepare(pack,config.legacyOptions(entry.id()),activeDimension);}
             else if(pack!=null)pack=PackOptions.apply(pack,config.options(entry.id()));
             activation=com.prismora.render.PrismoraRenderer.activate(pack,effectivePerformance());
         }catch(Exception e){activation=java.util.concurrent.CompletableFuture.failedFuture(e);}
@@ -103,6 +105,10 @@ public final class ShaderController {
     private void resetWatcher(){try{if(watcher!=null)watcher.watch(manager.directory(),selected());}catch(IOException e){fail(e);}}
     public void tick(){
         if(closed)return;
+        if(!busy&&!suspended&&!selected().isEmpty()&&Minecraft.getInstance().level!=null&&!activeDimension.equals(com.prismora.render.PrismoraRenderer.dimensionName())){
+            var entry=entries.stream().filter(e->e.id().equals(selected())&&e.valid()).findFirst().orElse(null);
+            if(entry!=null&&com.prismora.compat.LegacyPack.isLegacy(entry.pack())){activateEntry(entry);return;}
+        }
         if(!busy && watcher!=null && watcher.changed()){if(selected().isEmpty()||suspended){refresh();resetWatcher();}else reload();}
         var window=Minecraft.getInstance().getWindow();long now=System.nanoTime();
         if(window.getWidth()!=lastWidth||window.getHeight()!=lastHeight){lastWidth=window.getWidth();lastHeight=window.getHeight();resizeAt=now;}
