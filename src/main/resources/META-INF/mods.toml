@@ -1,0 +1,25 @@
+modLoader="javafml"
+loaderVersion="[66,)"
+license="All Rights Reserved"
+clientSideOnly=true
+
+[[mods]]
+modId="prismora"
+version="0.1.0"
+displayName="Prismora"
+authors="maniadiaz"
+description="Client shaderpack selection and postprocessing for Minecraft Java 26.3."
+
+[[dependencies.prismora]]
+modId="forge"
+mandatory=true
+versionRange="[66.1.0,67)"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.prismora]]
+modId="minecraft"
+mandatory=true
+versionRange="[26.3,26.4)"
+ordering="NONE"
+side="CLIENT"
