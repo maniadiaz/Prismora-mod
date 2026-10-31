@@ -9,6 +9,12 @@ import java.util.*;
 public final class PrismoraConfig {
     private final Path file;
     private String selected = "";
+    private com.prismora.performance.PerformanceSettings performance=com.prismora.performance.PerformanceSettings.preset(com.prismora.performance.PerformanceSettings.Profile.MEDIUM);
+    public com.prismora.performance.PerformanceSettings performance(){return performance;}
+    public void performance(com.prismora.performance.PerformanceSettings value)throws IOException{
+        var previous=performance;performance=Objects.requireNonNull(value);
+        try{save();}catch(IOException e){performance=previous;throw e;}
+    }
     private final Map<String,Map<String,Double>> options = new HashMap<>();
     public PrismoraConfig(Path file) { this.file = file; }
     public String selected() { return selected; }
@@ -36,7 +42,12 @@ public final class PrismoraConfig {
                     loaded.put(pack.getKey(),values);
                 }
             }
-            selected=selection;options.clear();options.putAll(loaded);
+            var settings=com.prismora.performance.PerformanceSettings.preset(com.prismora.performance.PerformanceSettings.Profile.MEDIUM);
+            if(json.has("performance")){
+                var value=json.getAsJsonObject("performance");
+                settings=new com.prismora.performance.PerformanceSettings(com.prismora.performance.PerformanceSettings.Profile.valueOf(value.get("profile").getAsString()),value.get("scale").getAsDouble(),value.get("bloom").getAsBoolean(),value.get("adaptive").getAsBoolean(),value.get("targetFps").getAsInt(),value.get("fallback").getAsBoolean());
+            }
+            performance=settings;selected=selection;options.clear();options.putAll(loaded);
         } catch(RuntimeException e){throw new IOException("Invalid Prismora config",e);}
     }
     public void select(String id)throws IOException{
@@ -54,7 +65,7 @@ public final class PrismoraConfig {
     }
     private void save()throws IOException{
         Files.createDirectories(file.toAbsolutePath().getParent());
-        JsonObject json=new JsonObject();json.addProperty("selected",selected);json.add("options",new Gson().toJsonTree(options));
+        JsonObject json=new JsonObject();json.addProperty("selected",selected);json.add("options",new Gson().toJsonTree(options));json.add("performance",new Gson().toJsonTree(performance));
         Path temporary=file.resolveSibling(file.getFileName()+".tmp");
         Files.writeString(temporary,json.toString(),StandardCharsets.UTF_8);
         try{Files.move(temporary,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
