@@ -1,0 +1,149 @@
+{
+  "date": "2026-10-31",
+  "platform": "Windows 11, RTX 5060 Ti, Java 25, Minecraft 26.3, Forge 66.1.0",
+  "unitTests": 65,
+  "unitFailures": 0,
+  "unitErrors": 0,
+  "runs": [
+    {
+      "backend": "opengl",
+      "scope": "legacy",
+      "passed": true,
+      "markers": [
+        "PRISMORA_LEGACY_GPU_PASS: ff32cc66",
+        "PRISMORA_LEGACY_DEPTH_PASS: normalized depth matches original floating-point reverse-Z attachment",
+        "PRISMORA_LEGACY_OPTIONS_PASS: ff196633",
+        "PRISMORA_LEGACY_NETHER_PASS: ff334ccc",
+        "PRISMORA_LEGACY_DIMENSION_PASS: ff196633",
+        "PRISMORA_LEGACY_SOURCE_ERROR_PASS: original include filename and line reported; fallback active",
+        "PRISMORA_LEGACY_RENDER_SMOKE_PASS"
+      ],
+      "logSha256": "2D3656C6B54F09588688193B96E9D3EB26A510E3F66861A7D5B0E23E44D8F8AE"
+    },
+    {
+      "backend": "vulkan",
+      "scope": "legacy",
+      "passed": true,
+      "markers": [
+        "PRISMORA_LEGACY_GPU_PASS: ff32cc66",
+        "PRISMORA_LEGACY_MATRICES_PASS: GPU projection/view inverse round trips and perspective capture verified",
+        "PRISMORA_LEGACY_DEPTH_PASS: normalized depth matches original floating-point reverse-Z attachment",
+        "PRISMORA_LEGACY_OPTIONS_PASS: ff196633",
+        "PRISMORA_LEGACY_NETHER_PASS: ff334ccc",
+        "PRISMORA_LEGACY_DIMENSION_PASS: ff196633",
+        "PRISMORA_LEGACY_SOURCE_ERROR_PASS: original include filename and line reported; fallback active",
+        "PRISMORA_LEGACY_RENDER_SMOKE_PASS"
+      ],
+      "logSha256": "059033E85E8DA6E45523FD3E26D7CA9254FDA4E0413807850135966DCE876FB8"
+    },
+    {
+      "backend": "opengl",
+      "scope": "native regression",
+      "passed": true,
+      "markers": [
+        "PRISMORA_RESTORE_PASS: saved selection restored on fresh client startup",
+        "PRISMORA_GPU_PASS: diagnostic pixel ff32cc66",
+        "PRISMORA_RENDER_SMOKE_PASS: world loaded, shader compiled, pixels verified, shader disabled",
+        "PRISMORA_ERROR_RECOVERY_PASS: invalid GLSL reported, disabled, game still running",
+        "PRISMORA_BLOOM_PASS: four-pass shader applied, nonuniform world image verified",
+        "PRISMORA_OPTIONS_PASS: bloom strength persisted and recompiled",
+        "PRISMORA_HOT_RELOAD_PASS: shader edit detected and recompiled",
+        "PRISMORA_RESIZE_PASS: 960x540 render target and active effect verified"
+      ],
+      "logSha256": "E8B9A6B7CE68D4DA73EFB1D11D240F6F3FE8C341F4B0B4DB10F57E6D4E48C1A2"
+    },
+    {
+      "backend": "vulkan",
+      "scope": "native regression",
+      "passed": true,
+      "markers": [
+        "PRISMORA_RESTORE_PASS: saved selection restored on fresh client startup",
+        "PRISMORA_GPU_PASS: diagnostic pixel ff32cc66",
+        "PRISMORA_RENDER_SMOKE_PASS: world loaded, shader compiled, pixels verified, shader disabled",
+        "PRISMORA_ERROR_RECOVERY_PASS: invalid GLSL reported, disabled, game still running",
+        "PRISMORA_BLOOM_PASS: four-pass shader applied, nonuniform world image verified",
+        "PRISMORA_OPTIONS_PASS: bloom strength persisted and recompiled",
+        "PRISMORA_HOT_RELOAD_PASS: shader edit detected and recompiled",
+        "PRISMORA_RESIZE_PASS: 960x540 render target and active effect verified"
+      ],
+      "logSha256": "C5AB281C2AB5F5CF43AFE9B7E3AEDB22CBEBC971E94AE31587A4E853FBEF1B81"
+    },
+    {
+      "backend": "opengl",
+      "scope": "legacy + 9 mods",
+      "passed": true,
+      "markers": [
+        "PRISMORA_LEGACY_GPU_PASS: ff32cc66",
+        "PRISMORA_LEGACY_MATRICES_PASS: GPU projection/view inverse round trips and perspective capture verified",
+        "PRISMORA_LEGACY_DEPTH_PASS: normalized depth matches original floating-point reverse-Z attachment",
+        "PRISMORA_LEGACY_OPTIONS_PASS: ff196633",
+        "PRISMORA_LEGACY_NETHER_PASS: ff334ccc",
+        "PRISMORA_LEGACY_DIMENSION_PASS: ff196633",
+        "PRISMORA_LEGACY_SOURCE_ERROR_PASS: original include filename and line reported; fallback active",
+        "PRISMORA_LEGACY_RENDER_SMOKE_PASS"
+      ],
+      "logSha256": "1E0BF995502945F7ECF2F6C49309D9EEFB21EFDE4C26323E0721436D81D64862"
+    },
+    {
+      "backend": "vulkan",
+      "scope": "legacy + 9 mods",
+      "passed": true,
+      "markers": [
+        "PRISMORA_LEGACY_GPU_PASS: ff32cc66",
+        "PRISMORA_LEGACY_MATRICES_PASS: GPU projection/view inverse round trips and perspective capture verified",
+        "PRISMORA_LEGACY_DEPTH_PASS: normalized depth matches original floating-point reverse-Z attachment",
+        "PRISMORA_LEGACY_OPTIONS_PASS: ff196633",
+        "PRISMORA_LEGACY_NETHER_PASS: ff334ccc",
+        "PRISMORA_LEGACY_DIMENSION_PASS: ff196633",
+        "PRISMORA_LEGACY_SOURCE_ERROR_PASS: original include filename and line reported; fallback active",
+        "PRISMORA_LEGACY_RENDER_SMOKE_PASS"
+      ],
+      "logSha256": "8AF56AC6C35F05EC7296CC283754CAAAD8DEEF8F3C8FB396D30E6821E569DFBB"
+    }
+  ],
+  "additionalMods": [
+    {
+      "name": "Backpack-mod-1.3.2.jar",
+      "sha256": "E288537DF83D1EF1568B9D7A79301A977318FFC4DA6626776BE5F15901C884FB"
+    },
+    {
+      "name": "BetterAdvancements-Forge-26.3-0.6.0.81.jar",
+      "sha256": "ADE98F0301CFFBC2E6B5ADAD6211A8C410362948DEE8FCF427AC39E9038BFABA"
+    },
+    {
+      "name": "carryon-forge-26.3-2.12.0.jar",
+      "sha256": "A3F8EC652390031DBFA1CEC817A4763789B0532F17AF47A33398B165192900FB"
+    },
+    {
+      "name": "FallingTree-26.3-25.jar",
+      "sha256": "4F9335E24F8028B13B09896A656503A69F6405A0451259DE0541DC52628DA20E"
+    },
+    {
+      "name": "geckolib-forge-26.3-5.5.7.jar",
+      "sha256": "EA935470B7BF14CA78D27C393825818DCCF86EF87C7B633AAAB6CF74BCB4ABFD"
+    },
+    {
+      "name": "GlitchCore-forge-26.3-26.3.0.0.5.jar",
+      "sha256": "A62915B9D333039D0CC0C520CF999F71CFD5E5AA8BF7406A60F959CC167BDD2A"
+    },
+    {
+      "name": "journeymap-forge-26.3-6.0.10.jar",
+      "sha256": "CBD432E81F72BD41FCEF399F209F7C4C7FCD7009AB8AF29263DE43EA447032FE"
+    },
+    {
+      "name": "MouseTweaks-forge-mc26.3-2.31.jar",
+      "sha256": "9E1BFB7E03ABEAB52A323CCD370725B89CA555A634C479F85F8E999B6BF5DE3F"
+    },
+    {
+      "name": "ore-vein-miner-3.2.0.jar",
+      "sha256": "A84FC49BCD79421090E6BCC5925DE838BB02EB0B58C2627B1FD3358D8EABDB53"
+    }
+  ],
+  "notes": [
+    "Vulkan native resize reported swapchain out of date; engine recovered and completed the resize check",
+    "Repeated modpack tests use a new disposable world to avoid experimental-world reopen prompts",
+    "Cursed Fog 1.0.10 official archive SHA512 verified; metadata inspection only",
+    "Terrain attributes, material MRT, separate opaque depth and solar shadow maps remain unimplemented",
+    "No GPU validation on Linux or entry-level hardware"
+  ]
+}

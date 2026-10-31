@@ -16,7 +16,7 @@ final class PerformanceSmokeProbe {
   var mc=Minecraft.getInstance();var controller=ShaderController.INSTANCE;
   if(++ticks>7000)throw new IllegalStateException("Performance probe timed out");
   if(state==0 && mc.gui.screen()!=null && ticks>60){
-   state=1;String id="PrismoraSmoke";
+   state=1;String id=SmokeWorlds.id();
    if(java.nio.file.Files.exists(mc.gameDirectory.toPath().resolve("saves/"+id+"/level.dat")))mc.createWorldOpenFlows().openWorld(id,()->mc.stop());
    else mc.createWorldOpenFlows().createFreshLevel(id,new LevelSettings(id,GameType.CREATIVE,LevelSettings.DifficultySettings.DEFAULT,true,WorldDataConfiguration.DEFAULT),new WorldOptions(1234,false,false),WorldPresets::createNormalWorldDimensions,new TitleScreen());
   }

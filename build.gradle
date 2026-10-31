@@ -23,6 +23,7 @@ minecraft {
         configureEach {
             workingDir = layout.projectDirectory.dir('run')
 
+            args '--mixin.config=prismora.mixins.json'
             systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
             systemProperty 'prismora.legacyRenderSmoke', providers.gradleProperty('prismoraLegacyRenderSmoke').getOrElse('false')
             systemProperty 'prismora.legacyUiSmoke', providers.gradleProperty('prismoraLegacyUiSmoke').getOrElse('false')
@@ -84,7 +85,7 @@ tasks.withType(Jar).configureEach {
     reproducibleFileOrder = true
     from('LICENSE.md')
     from('docs/third-party/Forge-MDK-LICENSE.txt') { into 'META-INF/licenses' }
-    manifest { attributes 'Implementation-Version': project.version }
+    manifest { attributes 'Implementation-Version': project.version, 'MixinConfigs': 'prismora.mixins.json' }
 }
 
 tasks.register('inspectShaderPack', JavaExec) {

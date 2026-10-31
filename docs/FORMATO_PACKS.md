@@ -24,7 +24,7 @@ Funciones: `prismoraResolution()` (píxeles), `prismoraTime()` (segundos desde l
 
 El reloj overworld y el cielo de una dimensión no son equivalentes: usa el ángulo solar del estado de render para el sol. En dimensiones sin cielo no se promete un sol visible. Para posiciones muy lejanas, la representación float pierde precisión; vanilla también ofrece `CameraBlockPos` y `CameraOffset` en `minecraft:globals.glsl`.
 
-Internamente se suben 64 bytes en una textura RGBA8_UNORM de 16x1 y se reconstruyen floats por bits, sin depender de uniforms mutables de `PostPass`. No se usan llamadas OpenGL directas. La textura la administra TextureManager y se libera al desactivar.
+Internamente se suben 320 bytes en una textura RGBA8_UNORM de 80x1 y se reconstruyen floats por bits, sin depender de uniforms mutables de `PostPass`. No se usan llamadas OpenGL directas. La textura la administra TextureManager y se libera al desactivar.
 
 Incluye propios: `shaders/include/foo.glsl` se publica como `prismora:foo.glsl`. El nombre `uniforms.glsl` del proveedor está reservado; evita redefinirlo.
 
@@ -68,3 +68,5 @@ Una pasada puede declarar `"feature":"bloom", "bypass":"SceneColor"`. `bypass` n
 Las opciones pueden tener `widget: "slider"` (predeterminado), `"toggle"` o `"choice"`. Toggle exige rango 0..1, step 1 y default 0/1. Choice añade `values` (2..16 números únicos del rango, incluyendo default) y `labels` opcional de igual longitud. Los valores se normalizan antes de compilar. `Prismora-Color` demuestra toggle de tinte y choice de exposición. La pantalla conserva un borrador y solo guarda/recompila al pulsar Aplicar.
 
 Los perfiles acotan el tamaño nominal total de los targets privados (color más profundidad, 8 bytes/píxel): Entrada 64 MiB, Baja 96 MiB, Media/Personalizado 192 MiB, Alta 384 MiB. Si se supera, la carga falla antes de crear buffers de GPU y se muestra el error; no se afirma que ese presupuesto equivalga a VRAM libre.
+
+Las posiciones 0–15 conservan el contrato anterior. Las posiciones 16–79 transportan proyección de mundo, inversa de proyección, vista e inversa de vista. `prismoraMatrix(slot)` reconstruye una matriz column-major a partir de 16 floats; los inicios son 16, 32, 48 y 64. La proyección se captura después del bob/daño/portal y convierte reverse-Z al clip legacy [-1,1] en ambos backends.

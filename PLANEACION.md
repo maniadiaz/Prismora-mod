@@ -194,3 +194,7 @@ Etapas 0–3 implementadas y verificadas. Etapa 4 cerrada como investigación co
 ## Ampliación 0.2.0 — Rendimiento
 
 Perfiles Entrada/Baja/Media/Alta, escala de postproceso, bloom opcional, sliders/toggles/choices, política adaptativa con fallback, presupuestos nominales de targets y benchmark reproducible. Plan y estado: docs/PLAN_RENDIMIENTO.md. Resultados físicos: docs/RENDIMIENTO.md. El nuevo plan OptiFine/Iris propuesto está guardado y ampliado en docs/PLAN_COMPATIBILIDAD_PROPUESTO.md; no se declara implementado por estos ajustes de rendimiento.
+
+## Continuación del plan de compatibilidad
+
+El seguimiento vigente de los siete puntos solicitados está en docs/IMPLEMENTACION_COMPATIBILIDAD.md. El cierre como investigación de la etapa 4 del plan inicial no cuenta como implementación de geometría/sombras del nuevo alcance. Se han añadido lectura y menús legacy, ejecución composite/final, profundidad flotante y captura de matrices; el render de packs con gbuffers, materiales, MRT y sombras sigue pendiente.

@@ -39,7 +39,7 @@ public final class PackCompiler {
     item.addProperty(name.equals("sceneDepth")?"use_depth_buffer":"bilinear",true);inputs.add(item);
    }
    if(pack.manifest().has("dynamicUniforms") && pack.manifest().get("dynamicUniforms").getAsBoolean()) {
-    var data=new JsonObject();data.addProperty("sampler_name","PrismoraData");data.addProperty("location","prismora:uniforms");data.addProperty("width",16);data.addProperty("height",1);inputs.add(data);
+    var data=new JsonObject();data.addProperty("sampler_name","PrismoraData");data.addProperty("location","prismora:uniforms");data.addProperty("width",FrameMatrices.WIDTH);data.addProperty("height",1);inputs.add(data);
    }
    pass.add("inputs",inputs);
    String outputId=output.equals("screen")?"prismora:__screen":target(output);

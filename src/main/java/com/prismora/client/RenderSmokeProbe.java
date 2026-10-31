@@ -36,7 +36,7 @@ final class RenderSmokeProbe {
   if(ticks>6000)throw new IllegalStateException("Render smoke timed out");
   if(state==0 && mc.gui.screen()!=null && ticks>60) {
    state=1;
-   String id="PrismoraSmoke";
+   String id=SmokeWorlds.id();
    if(java.nio.file.Files.exists(mc.gameDirectory.toPath().resolve("saves/"+id+"/level.dat"))) mc.createWorldOpenFlows().openWorld(id,()->mc.stop());
    else mc.createWorldOpenFlows().createFreshLevel(id,new LevelSettings(id,GameType.CREATIVE,LevelSettings.DifficultySettings.DEFAULT,true,WorldDataConfiguration.DEFAULT),new WorldOptions(1234L,false,false),WorldPresets::createNormalWorldDimensions,new TitleScreen());
   }
@@ -57,7 +57,7 @@ final class RenderSmokeProbe {
    state=3;
    Screenshot.takeScreenshot(mc.gameRenderer.mainRenderTarget(),image->{
     try(image) {
-     int pixel=image.getPixel(image.getWidth()/3,image.getHeight()/3);
+     int pixel=image.getPixel(Math.min(image.getWidth()-1,image.getWidth()/2+20),image.getHeight()/2);
      if(Math.abs(ARGB.red(pixel)-51)>5 || Math.abs(ARGB.green(pixel)-204)>5 || Math.abs(ARGB.blue(pixel)-102)>5)throw new IllegalStateException("Diagnostic pixel mismatch: "+Integer.toHexString(pixel));
      try { image.writeToFile(mc.gameDirectory.toPath().resolve("prismora-diagnostic.png")); }catch(java.io.IOException e){throw new RuntimeException(e);}
      Prismora.LOGGER.info("PRISMORA_GPU_PASS: diagnostic pixel {}",Integer.toHexString(pixel));sampled=true;

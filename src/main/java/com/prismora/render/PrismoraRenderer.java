@@ -17,6 +17,7 @@ public final class PrismoraRenderer {
  private static boolean initialized,ready,inFlight;
  private static int compiledWidth,compiledHeight;
  private static boolean dynamicData;
+ public static boolean wantsDynamicData(){return dynamicData&&!active.isEmpty();}
  private static com.google.gson.JsonObject sourceFiles=new com.google.gson.JsonObject();
  public static String dimensionName(){var level=Minecraft.getInstance().level;return level==null?"minecraft:overworld":level.dimension().identifier().toString();}
  public static int compiledWidth(){return compiledWidth;}

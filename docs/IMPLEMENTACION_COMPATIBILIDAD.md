@@ -68,3 +68,19 @@ Resumen verificable de esta ampliación: docs/pruebas/RESULTADOS-LEGACY.json. Ú
 El puente composite/final admite depthtex0 con lectura directa del buffer flotante real de Minecraft. Convierte reverse-Z al muestrear (near=0/far=1), sin textura intermedia RGBA8. Admite texture/texture2D, textureLod/texture2DLod y texelFetch con el sampler explícito; los usos indirectos/offset y el muestreo en vértices se rechazan por ahora. depthtex1/2 y shadowtex no se sustituyen por depthtex0: representan etapas diferentes aún pendientes.
 
 El fixture verifica en GPU que la profundidad es finita, está en [0,1] y suma 1 con la muestra original reverse-Z con tolerancia 1e-6. Se repiten opciones, viaje entre dimensiones y error de include con el JAR en OpenGL y Vulkan. Esta conexión no constituye un G-buffer ni un mapa de sombras.
+
+## Matrices de mundo y precisión
+
+Se capturan la proyección de mundo y la vista reales, con sus inversas. Un mixin cliente interviene exactamente en la subida de la proyección después de bob/daño/portal, delegando la llamada nativa. Los uniforms gbufferProjection, gbufferProjectionInverse, gbufferModelView y gbufferModelViewInverse usan datos de ese frame. El clip reverse-Z se convierte a [-1,1] legacy tanto con profundidad nativa OpenGL [-1,1] como Vulkan [0,1]. No se inventan matrices de sombras.
+
+La textura de transporte pasa de 16x1 a 80x1; conserva los primeros 16 slots y codifica cada float con sus cuatro bytes. Pruebas JOML comprueban near/far e inversas en ambas convenciones. El fixture GPU exige una proyección perspectiva real e identidades al componer matrices/inversas, además de verificar profundidad, opciones, dimensiones y error de origen. También se admiten declaraciones de uniforms separados por comas; arrays y usos desconocidos siguen rechazados.
+
+Las regresiones del formato propio con el nuevo transporte pasan en OpenGL/Vulkan: restauración, píxeles, errores, bloom, opciones, hot reload y redimensionado. Vulkan notificó swapchain out of date al redimensionar; el motor se recuperó y completó la verificación y el cierre.
+
+## Compatibilidad con packs y otros mods
+
+Cursed Fog 1.0.10, descargado de su proyecto oficial de Modrinth solo para inspección: 88 archivos, 50 opciones, 6 pantallas, 3 perfiles y tres dimensiones. Requiere at_tangent, mc_Entity, geometría/MRT, depthtex1 y mapas de sombra además de postprocesado; no se declara render compatible. No se distribuye su código.
+
+El script Test-PackagedClient acepta -AdditionalModsDirectory y crea un directorio aislado identificado por hashes de los JAR. Copia esos mods y registra nombres/hashes; no copia ni modifica mundos/configuración de la instalación original. Esta prueba comprueba coexistencia de arranque, render del fixture y sus operaciones; no valida todas las funciones de cada mod ni renderers alternativos.
+
+Validación final de esta ampliación: 65 pruebas unitarias, cero fallos/errores. JAR probado con el fixture legacy y regresión del formato propio en ambos backends. Con copias de los nueve mods de Chill, el fixture también completa el recorrido en OpenGL y Vulkan. Las repeticiones crean un mundo desechable nuevo para no reutilizar el mundo experimental generado por los mods. Inventario, hashes, marcadores y límites en docs/pruebas/RESULTADOS-PROFUNDIDAD-MATRICES.json.

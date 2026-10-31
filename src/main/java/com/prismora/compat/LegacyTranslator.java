@@ -8,8 +8,9 @@ public final class LegacyTranslator {
  public record Program(String vertex,String fragment,Set<String> samplers,boolean dynamic,Map<Integer,String> sourceFiles) {}
  private record Edit(int start,int end,String replacement) {}
  private static final Pattern VARYING=Pattern.compile("\\b(varying|in|out)\\s+(?:(flat|smooth)\\s+)?(float|int|vec[234]|ivec[234]|mat[234])\\s+(\\w+)\\s*(\\[\\s*\\d+\\s*])?\\s*;");
- private static final Pattern UNIFORM=Pattern.compile("\\buniform\\s+(sampler2D|sampler2DShadow|float|int|bool|vec[234]|ivec[234]|mat[234])\\s+([A-Za-z_]\\w*)\\s*;");
+ private static final Pattern UNIFORM=Pattern.compile("\\buniform\\s+(sampler2D|sampler2DShadow|float|int|bool|vec[234]|ivec[234]|mat[234])\\s+([^;{}]+)\\s*;");
  private static final Map<String,String> VALUES=Map.ofEntries(
+  Map.entry("gbufferProjection","prismoraMatrix(16)"),Map.entry("gbufferProjectionInverse","prismoraMatrix(32)"),Map.entry("gbufferModelView","prismoraMatrix(48)"),Map.entry("gbufferModelViewInverse","prismoraMatrix(64)"),
   Map.entry("viewWidth","prismoraResolution().x"),Map.entry("viewHeight","prismoraResolution().y"),Map.entry("aspectRatio","(prismoraResolution().x/prismoraResolution().y)"),Map.entry("worldTime","int(prismoraDayTicks())"),Map.entry("frameTimeCounter","mod(prismoraTime(),3600.0)"),Map.entry("cameraPosition","prismoraCamera()"),Map.entry("sunAngle","fract(prismoraSunAngle()/6.28318530718)"),Map.entry("rainStrength","(1.0-prismoraValue(12))"));
  public Program translate(ShaderPreprocessor.Result vertex,ShaderPreprocessor.Result fragment)throws IOException{
   String vs=vertex.source(),fs=fragment.source();var locations=new LinkedHashMap<String,Integer>();int slot=0;
@@ -20,10 +21,15 @@ public final class LegacyTranslator {
  private String stage(String source,boolean vertex,Map<String,Integer> locations,Set<String> samplers,boolean[] dynamic)throws IOException{
   String masked=mask(source);var edits=new ArrayList<Edit>();var macros=new StringBuilder();var uniforms=UNIFORM.matcher(masked);
   while(uniforms.find()){
-   String type=uniforms.group(1),name=uniforms.group(2),definition;
+   String type=uniforms.group(1);
+   for(String declaration:uniforms.group(2).split(",",-1)){
+   String name=declaration.trim(),definition;
+   if(!name.matches("[A-Za-z_]\\w*"))throw new IOException("Unsupported uniform array/initializer: "+name);
    if(type.startsWith("sampler")){if(!type.equals("sampler2D"))throw new IOException("Shadow comparison sampler requires shadow bridge: "+name);samplers.add(name);definition="uniform sampler2D "+name+"Sampler;\n#define "+name+" "+name+"Sampler\n";}
    else{String value=VALUES.get(name);if(value==null)throw new IOException("Unsupported legacy uniform: "+type+" "+name);dynamic[0]=true;definition="#define "+name+" ("+value+")\n";}
-   macros.append(definition);edits.add(new Edit(uniforms.start(),uniforms.end()," "+"\n".repeat((int)source.substring(uniforms.start(),uniforms.end()).chars().filter(c->c=='\n').count())));
+   macros.append(definition);
+   }
+   edits.add(new Edit(uniforms.start(),uniforms.end()," "+"\n".repeat((int)source.substring(uniforms.start(),uniforms.end()).chars().filter(c->c=='\n').count())));
   }
   var varying=VARYING.matcher(masked);
   while(varying.find()){

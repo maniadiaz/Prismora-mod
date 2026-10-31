@@ -17,7 +17,7 @@ try {
         Copy-Item -LiteralPath $packZip -Destination (Join-Path $staging 'shaderpacks') -Force
     }
     Copy-Item -LiteralPath README.md,CHANGELOG.md,LICENSE.md,PLANEACION.md -Destination $staging -Force
-    Copy-Item -LiteralPath docs/FORMATO_PACKS.md,docs/VALIDACION.md,docs/GEOMETRIA.md,docs/PUBLICACION.md,docs/RENDIMIENTO.md,docs/PLAN_RENDIMIENTO.md,docs/PLAN_COMPATIBILIDAD_PROPUESTO.md,docs/compat-matrix.md,docs/BUG_REPORTS.md -Destination (Join-Path $staging 'docs') -Force
+    Copy-Item -LiteralPath docs/FORMATO_PACKS.md,docs/IMPLEMENTACION_COMPATIBILIDAD.md,docs/VALIDACION.md,docs/GEOMETRIA.md,docs/PUBLICACION.md,docs/RENDIMIENTO.md,docs/PLAN_RENDIMIENTO.md,docs/PLAN_COMPATIBILIDAD_PROPUESTO.md,docs/compat-matrix.md,docs/BUG_REPORTS.md -Destination (Join-Path $staging 'docs') -Force
     Copy-Item -LiteralPath docs/pruebas -Destination (Join-Path $staging 'docs') -Recurse -Force
     Copy-Item -LiteralPath docs/screenshots -Destination (Join-Path $staging 'docs') -Recurse -Force
     Copy-Item -LiteralPath docs/third-party -Destination (Join-Path $staging 'docs') -Recurse -Force
