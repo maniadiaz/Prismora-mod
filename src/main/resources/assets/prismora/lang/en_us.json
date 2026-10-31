@@ -3,6 +3,8 @@
   "prismora.disable": "Disable",
   "prismora.reload": "Reload",
   "prismora.folder": "Open folder",
-  "prismora.selection_only": "Selection saved; rendering pending implementation",
-  "key.prismora.open": "Open Prismora"
+  "key.prismora.open": "Open Prismora",
+  "prismora.loading": "Loading shaders...",
+  "prismora.active": "Selection: ",
+  "prismora.errors": "Error details"
 }

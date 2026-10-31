@@ -13,6 +13,8 @@ public final class ShaderController {
     private final PrismoraConfig config;
     private List<ShaderPackManager.Entry> entries = List.of();
     private String error = "";
+    private boolean busy;
+    public boolean busy() { return busy; }
     private ShaderController() {
         var root = Minecraft.getInstance().gameDirectory.toPath();
         manager = new ShaderPackManager(root.resolve("shaderpacks"));
@@ -33,9 +35,26 @@ public final class ShaderController {
         } catch(IOException e) { fail(e); }
     }
     public void select(ShaderPackManager.Entry entry) {
-        if (entry != null && !entry.valid()) { error = entry.error(); return; }
-        try { config.select(entry == null ? "" : entry.id()); error = ""; }
-        catch(IOException e) { fail(e); }
+        if(busy)return;
+        if(entry != null && !entry.valid()) { error=entry.error();return; }
+        busy=true;error="";
+        com.prismora.render.PrismoraRenderer.activate(entry==null?null:entry.pack()).whenCompleteAsync((unused,failure)->{
+            if(failure==null) {
+                try { config.select(entry==null?"":entry.id()); } catch(IOException e) { fail(e); }
+                busy=false;
+            } else {
+                fail(new IOException(failure.getCause()==null?failure.getMessage():failure.getCause().getMessage(),failure));
+                com.prismora.render.PrismoraRenderer.activate(null).whenCompleteAsync((ignored,recovery)->{
+                    try { config.select(""); } catch(IOException e) { fail(e); }
+                    busy=false;
+                },Minecraft.getInstance());
+            }
+        },Minecraft.getInstance());
+    }
+    public void reload() {
+        if(busy)return;refresh();
+        if(selected().isEmpty())select(null);
+        else entries.stream().filter(e->e.id().equals(selected())).findFirst().ifPresent(this::select);
     }
     public void fail(Exception e) { error = e.getMessage() == null ? e.toString() : e.getMessage(); Prismora.LOGGER.error("Prismora: {}", error, e); }
 }

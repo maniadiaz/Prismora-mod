@@ -18,6 +18,10 @@ import net.minecraftforge.fml.common.Mod;
 
 @Mod.EventBusSubscriber(modid = Prismora.MOD_ID, value = Dist.CLIENT)
 public final class ClientBootstrap {
+    @SubscribeEvent public static void beforeFrame(TickEvent.RenderTickEvent.Pre event) { com.prismora.render.PrismoraRenderer.beforeFrame(); }
+    @SubscribeEvent public static void packs(net.minecraftforge.event.AddPackFindersEvent event) {
+        if(event.getPackType()==net.minecraft.server.packs.PackType.CLIENT_RESOURCES) event.addRepositorySource(com.prismora.render.PrismoraRenderer::provide);
+    }
     private static final KeyMapping OPEN = new KeyMapping("key.prismora.open", InputConstants.Type.KEYBOARD, InputConstants.KEY_F6, KeyMapping.Category.MISC);
     @SubscribeEvent public static void keys(RegisterKeyMappingsEvent event) { event.register(OPEN); }
     @SubscribeEvent public static void screen(ScreenEvent.Init.Post event) {

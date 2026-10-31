@@ -26,3 +26,13 @@ Prototipar un pack de recursos interno de prioridad alta y solo presente cuando 
 - Build y 10 pruebas JUnit correctos (8 de packs y 2 de configuración).
 - Cliente real con '-PprismoraSmoke=true -PprismoraUiSmoke=true': 134 frames de la pantalla de Prismora, regreso al menú y cierre limpio.
 - Los botones muestran selección persistente; el render se integra en la siguiente entrega.
+
+## Postproceso y recuperación
+
+- Build correcto y 11 pruebas JUnit sin fallos.
+- Cliente real en OpenGL (NVIDIA 621.01) y Vulkan (1.4.357, NVIDIA 621.01): mundo PrismoraSmoke cargado, efecto compilado y aplicado, lectura GPU `ff32ca65` dentro de tolerancia del color diagnóstico, desactivación y eliminación del pack interno.
+- GLSL deliberadamente inválido: error informado al controlador, pack retirado y cliente todavía operativo (`PRISMORA_ERROR_RECOVERY_PASS`). La UI permite leer los diagnósticos en una pantalla paginada.
+- Se suprime `end_of_frame` durante carga/validación para impedir que vanilla active un shader sin validar y dispare recuperación global de recursos.
+- Al desactivar, Prismora deja de proporcionar `end_of_frame`; un recurso de otro pack vuelve a estar disponible. Si dos packs lo definen simultáneamente, gana el pack interno superior de Prismora; no hay composición automática entre ambos.
+- `scripts/Test-Prismora.ps1 -Backend opengl` o `-Backend vulkan` reproduce build, tests y prueba de GPU. Comprueba el backend efectivo para detectar fallback.
+- Captura de diagnóstico local: `run/prismora-diagnostic.png` (no versionada).

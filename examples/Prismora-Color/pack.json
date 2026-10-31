@@ -1,0 +1,16 @@
+{
+  "formatVersion": 1,
+  "name": "Prismora-Color",
+  "version": "1.0.0",
+  "passes": [
+    {
+      "name": "color",
+      "vertex": "shaders/post.vsh",
+      "fragment": "shaders/post.fsh",
+      "inputs": {
+        "SceneColor": "sceneColor"
+      },
+      "output": "screen"
+    }
+  ]
+}

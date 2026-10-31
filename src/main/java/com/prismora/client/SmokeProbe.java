@@ -17,6 +17,7 @@ public final class SmokeProbe {
   if(Boolean.getBoolean("prismora.uiSmoke") && event.getScreen() instanceof com.prismora.client.gui.ShaderPackScreen) uiFrames++;
  }
  @SubscribeEvent public static void tick(TickEvent.ClientTickEvent.Post event) {
+  if(Boolean.getBoolean("prismora.renderSmoke")) { RenderSmokeProbe.tick(); return; }
   if(!Boolean.getBoolean("prismora.smoke")) return;
   Minecraft mc=Minecraft.getInstance();
   if(mc.gui.screen()==null) return;

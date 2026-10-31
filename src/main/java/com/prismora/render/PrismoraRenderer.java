@@ -1,0 +1,71 @@
+package com.prismora.render;
+import com.prismora.Prismora;
+import com.prismora.pack.PackLoader;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LevelTargetBundle;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.packs.*;
+import net.minecraft.server.packs.repository.*;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+
+public final class PrismoraRenderer {
+ private static volatile Map<String,byte[]> active=Map.of();
+ private static boolean initialized,ready,inFlight;
+ private static void restoreSelection() {
+  if(initialized)return;initialized=true;
+  try {
+   var root=Minecraft.getInstance().gameDirectory.toPath();
+   var config=new com.prismora.client.config.PrismoraConfig(root.resolve("config/prismora.json"));config.load();
+   if(!config.selected().isEmpty()) active=new PackCompiler().compile(new PackLoader().load(root.resolve("shaderpacks").resolve(config.selected())));
+  } catch(Exception e) { Prismora.LOGGER.error("Cannot restore selected shaderpack",e);active=Map.of(); }
+ }
+ public static void provide(Consumer<Pack> consumer) {
+  restoreSelection();
+  Map<String,byte[]> snapshot=active;if(snapshot.isEmpty())return;
+  var location=new PackLocationInfo("prismora/active",Component.literal("Prismora"),PackSource.BUILT_IN,Optional.empty());
+  var supplier=new Pack.ResourcesSupplier() {
+   public PackMetadataResources openMetadata(PackLocationInfo info) { return new MemoryPack(info,snapshot); }
+   public Stream<PackResources> openResources(PackLocationInfo info,Pack.Metadata metadata) { return Stream.of(new MemoryPack(info,snapshot)); }
+  };
+  // Hidden required pack is present only while a shader is enabled.
+  var metadata=new Pack.Metadata(Component.literal("Prismora active shader"),PackCompatibility.COMPATIBLE,net.minecraft.world.flag.FeatureFlagSet.of(),List.of(),true);
+  consumer.accept(new Pack(location,supplier,metadata,new PackSelectionConfig(true,Pack.Position.TOP,true)));
+ }
+ public static CompletableFuture<Void> activate(PackLoader.ShaderPack pack) {
+  initialized=true;ready=false;inFlight=true;
+  active=pack==null?Map.of():new PackCompiler().compile(pack);
+  Minecraft mc=Minecraft.getInstance();
+  return mc.reloadResourcePacks().thenRunAsync(()->{
+   if(pack==null){ready=true;inFlight=false;return;}
+   validateCurrent();ready=true;inFlight=false;
+   Prismora.LOGGER.info("PRISMORA_SHADER_READY: {}",pack.id());
+  },mc);
+ }
+ public static void beforeFrame() {
+  var mc=Minecraft.getInstance();
+  if(!ready && !inFlight && !active.isEmpty() && mc.isGameLoadFinished()) {
+   try { validateCurrent();ready=true; }
+   catch(Exception e) {
+    com.prismora.client.ShaderController.INSTANCE.fail(e);
+    inFlight=true;
+    mc.execute(()->com.prismora.client.ShaderController.INSTANCE.select(null));
+   }
+  }
+  if(!ready && (inFlight || !active.isEmpty())) mc.gameRenderer.gameRenderState().requestedPostEffects.remove(Identifier.withDefaultNamespace("end_of_frame"));
+ }
+ public static void validateCurrent() {
+  if(active.isEmpty())return;
+  var json=com.google.gson.JsonParser.parseString(new String(active.get("assets/minecraft/post_effect/end_of_frame.json"),java.nio.charset.StandardCharsets.UTF_8));
+  var config=net.minecraft.client.renderer.PostChainConfig.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE,json).getOrThrow();
+  var projection=new net.minecraft.client.renderer.Projection();projection.setupOrtho(0.1F,1000F,1F,1F,false);
+  try(var diagnostics=new CompileDiagnostics();var buffer=new net.minecraft.client.renderer.ProjectionMatrixBuffer("prismora-validation")) {
+   try(var chain=net.minecraft.client.renderer.PostChain.load(config,Minecraft.getInstance().getTextureManager(),LevelTargetBundle.MAIN_TARGETS,Identifier.withDefaultNamespace("end_of_frame"),projection,buffer)) { }
+   catch(Exception e) { throw new IllegalStateException(e.getMessage()+"\n"+diagnostics.details(),e); }
+  } catch(Exception e) { throw new IllegalStateException("Shader compilation failed: "+e.getMessage(),e); }
+ }
+ public static void clearSnapshot() { active=Map.of(); }
+}

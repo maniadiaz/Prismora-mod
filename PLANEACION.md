@@ -97,23 +97,23 @@ Cierre: build reproducible, evidencia del arranque y documento de decisiones de 
 
 ### Etapa 1 — Interfaz y gestión de packs
 
-- [ ] Descubrir carpetas y ZIP en `shaderpacks/`.
-- [ ] Validar el manifiesto y las rutas con límites documentados.
-- [ ] Crear lista, selección, desactivación, recarga y acceso a la carpeta.
-- [ ] Integrar botón en ajustes de vídeo y tecla configurable usando la API confirmada.
-- [ ] Persistir selección y opciones; recuperar una selección cuyo pack desapareció.
-- [ ] Incluir textos en español e inglés y errores visibles.
+- [x] Descubrir carpetas y ZIP en `shaderpacks/`.
+- [x] Validar el manifiesto y las rutas con límites documentados.
+- [x] Crear lista, selección, desactivación, recarga y acceso a la carpeta.
+- [x] Integrar botón en ajustes de vídeo y tecla configurable usando la API confirmada.
+- [x] Persistir selección y opciones; recuperar una selección cuyo pack desapareció.
+- [x] Incluir textos en español e inglés y errores visibles.
 
 Cierre: selección persistente tras reiniciar; packs válidos, inválidos, ausentes y ZIP comprobados. La interfaz debe indicar que seleccionar no implica render activo hasta la etapa 2.
 
 ### Etapa 2 — Postproceso funcional
 
-- [ ] Cargar shaders propios e integrarlos mediante la vía probada en la etapa 0.
-- [ ] Aplicar una pasada de corrección de color o tonemapping al frame.
-- [ ] Incluir un pack de ejemplo mínimo y documentado.
-- [ ] Mostrar errores de compilación y conservar el juego utilizable ante un pack fallido.
-- [ ] Liberar recursos al cambiar de pack, redimensionar o cerrar.
-- [ ] Validar activación, desactivación, recarga y convivencia con efectos vanilla.
+- [x] Cargar shaders propios e integrarlos mediante la vía probada en la etapa 0.
+- [x] Aplicar una pasada de corrección de color o tonemapping al frame.
+- [x] Incluir un pack de ejemplo mínimo y documentado.
+- [x] Mostrar errores de compilación y conservar el juego utilizable ante un pack fallido.
+- [x] Liberar recursos al cambiar de pack, redimensionar o cerrar.
+- [x] Validar activación, desactivación, recarga y convivencia con efectos vanilla.
 
 Cierre: efecto visible y reversible dentro del mundo, sin reiniciar el juego; registrar backend, hardware y resultado. Verificar OpenGL y Vulkan antes de afirmar compatibilidad con ambos.
 
@@ -177,3 +177,7 @@ No versionar credenciales, mundos, logs, cachés, directorios de build ni packs 
 - MDK y fuentes de la versión fijada: fuente de verdad para firmas y configuración del proyecto.
 
 Al preparar esta planeación se encontró el repositorio vacío y Java 25 instalado. Ninguna etapa de implementación se considera terminada. La disponibilidad de otros mods y la compatibilidad práctica de Prismora siguen sin verificarse.
+
+## Avance de implementación
+
+Base y selección subidas a Git. Postproceso validado en cliente real con OpenGL y Vulkan, lectura de píxeles, desactivación y recuperación de GLSL inválido. Véase `docs/VALIDACION.md`. Etapas restantes en curso; no implica publicación en plataformas.

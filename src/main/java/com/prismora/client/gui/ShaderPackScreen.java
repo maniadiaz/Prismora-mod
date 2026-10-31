@@ -24,17 +24,18 @@ public final class ShaderPackScreen extends Screen {
    if(!entry.valid()) button.setTooltip(Tooltip.create(Component.literal(entry.error())));
    addRenderableWidget(button);
   }
+  addRenderableWidget(Button.builder(Component.translatable("prismora.errors"),b->minecraft.gui.setScreen(new ShaderErrorScreen(this,controller.error()))).bounds(left+48,height-110,204,20).build());
   addRenderableWidget(Button.builder(Component.literal("<"),b->{page=Math.max(0,page-1);rebuildWidgets();}).bounds(left,height-110,40,20).build());
   addRenderableWidget(Button.builder(Component.literal(">"),b->{page=Math.min(pages-1,page+1);rebuildWidgets();}).bounds(left+260,height-110,40,20).build());
   addRenderableWidget(Button.builder(Component.translatable("prismora.disable"),b->{controller.select(null);rebuildWidgets();}).bounds(left,height-84,146,20).build());
-  addRenderableWidget(Button.builder(Component.translatable("prismora.reload"),b->{controller.refresh();rebuildWidgets();}).bounds(left+154,height-84,146,20).build());
+  addRenderableWidget(Button.builder(Component.translatable("prismora.reload"),b->{controller.reload();rebuildWidgets();}).bounds(left+154,height-84,146,20).build());
   addRenderableWidget(Button.builder(Component.translatable("prismora.folder"),b->Blaze3D.openPath(controller.manager().directory())).bounds(left,height-58,146,20).build());
   addRenderableWidget(Button.builder(Component.translatable("gui.done"),b->onClose()).bounds(left+154,height-58,146,20).build());
  }
  @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float partial) {
   super.extractRenderState(graphics,x,y,partial);
   graphics.centeredText(font,title,width/2,15,0xFFFFFFFF);
-  String status=controller.error().isEmpty()?Component.translatable("prismora.selection_only").getString():controller.error();
+  String status=controller.error().isEmpty()?Component.translatable(controller.busy()?"prismora.loading":"prismora.active").getString()+controller.selected():controller.error();
   graphics.text(font,font.plainSubstrByWidth(status,Math.max(50,width-24)),12,height-26,controller.error().isEmpty()?0xFFBBBBBB:0xFFFF7777);
  }
  @Override public void onClose() { minecraft.gui.setScreen(parent); }
