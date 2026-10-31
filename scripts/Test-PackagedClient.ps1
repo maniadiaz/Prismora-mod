@@ -1,4 +1,4 @@
-param([ValidateSet('opengl','vulkan')][string]$Backend='opengl')
+param([ValidateSet('opengl','vulkan')][string]$Backend='opengl',[ValidateSet('regression','performance')][string]$Probe='regression')
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $projectRoot
@@ -17,7 +17,8 @@ minecraft {
     runs {
         register('client') {
             workingDir = layout.projectDirectory.dir('run')
-            systemProperty 'prismora.renderSmoke', 'true'
+            systemProperty 'prismora.renderSmoke', providers.gradleProperty('prismoraProbe').map { it == 'regression' }.getOrElse('true')
+            systemProperty 'prismora.performanceSmoke', providers.gradleProperty('prismoraProbe').map { it == 'performance' }.getOrElse('false')
             systemProperty 'prismora.smokePack', 'Prismora-Multipass'
             systemProperty 'prismora.expectedStartup', 'Prismora-Bloom'
         }
@@ -40,10 +41,11 @@ dependencies { implementation minecraft.dependency('net.minecraftforge:forge:26.
     [IO.File]::WriteAllText($options,$text,[Text.UTF8Encoding]::new($false))
     New-Item -ItemType Directory -Force (Join-Path $isolated 'run/config') | Out-Null
     [IO.File]::WriteAllText((Join-Path $isolated 'run/config/prismora.json'),'{"selected":"Prismora-Bloom","options":{"Prismora-Bloom":{"bloom_strength":0.15}}}',[Text.UTF8Encoding]::new($false))
-    & .\gradlew.bat -p $isolated runClient --console=plain
+    & .\gradlew.bat -p $isolated runClient "-PprismoraProbe=$Probe" --console=plain
     if($LASTEXITCODE -ne 0){throw 'Packaged client failed'}
     $log=Get-Content -Raw -LiteralPath (Join-Path $isolated 'run/logs/latest.log')
-    foreach($marker in @('PRISMORA_GPU_PASS','PRISMORA_RENDER_SMOKE_PASS','PRISMORA_ERROR_RECOVERY_PASS','PRISMORA_BLOOM_PASS','PRISMORA_OPTIONS_PASS','PRISMORA_HOT_RELOAD_PASS','PRISMORA_RESTORE_PASS','PRISMORA_RESIZE_PASS')){
+    $markers=if($Probe -eq 'performance'){@('PRISMORA_SCALED_TARGETS_PASS','PRISMORA_ENTRY_PROFILE_PASS','PRISMORA_PERFORMANCE_SMOKE_PASS')}else{@('PRISMORA_GPU_PASS','PRISMORA_RENDER_SMOKE_PASS','PRISMORA_ERROR_RECOVERY_PASS','PRISMORA_BLOOM_PASS','PRISMORA_OPTIONS_PASS','PRISMORA_HOT_RELOAD_PASS','PRISMORA_RESTORE_PASS','PRISMORA_RESIZE_PASS')}
+    foreach($marker in $markers){
         if(-not $log.Contains($marker)){throw "Missing packaged validation marker: $marker"}
     }
     if($log -notmatch "Using graphics backend $Backend"){throw 'Backend fallback detected'}

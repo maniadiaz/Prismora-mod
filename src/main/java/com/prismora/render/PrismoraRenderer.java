@@ -15,12 +15,22 @@ import java.util.stream.Stream;
 public final class PrismoraRenderer {
  private static volatile Map<String,byte[]> active=Map.of();
  private static boolean initialized,ready,inFlight;
+ private static int compiledWidth,compiledHeight;
+ private static boolean dynamicData;
+ public static int compiledWidth(){return compiledWidth;}
+ public static int compiledHeight(){return compiledHeight;}
+ public static com.google.gson.JsonObject activeChain(){return active.isEmpty()?new com.google.gson.JsonObject():com.google.gson.JsonParser.parseString(new String(active.get("assets/minecraft/post_effect/end_of_frame.json"),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();}
+ private static Map<String,byte[]> compile(PackLoader.ShaderPack pack,com.prismora.performance.PerformanceSettings settings){
+  var window=Minecraft.getInstance().getWindow();compiledWidth=window.getWidth();compiledHeight=window.getHeight();
+  var result=new PackCompiler().compile(pack,settings,compiledWidth,compiledHeight);
+  dynamicData=new String(result.get("assets/minecraft/post_effect/end_of_frame.json"),java.nio.charset.StandardCharsets.UTF_8).contains("PrismoraData");return result;
+ }
  private static void restoreSelection() {
   if(initialized)return;initialized=true;
   try {
    var root=Minecraft.getInstance().gameDirectory.toPath();
    var config=new com.prismora.client.config.PrismoraConfig(root.resolve("config/prismora.json"));config.load();
-   if(!config.selected().isEmpty()) active=new PackCompiler().compile(com.prismora.pack.PackOptions.apply(new PackLoader().load(root.resolve("shaderpacks").resolve(config.selected())),config.options(config.selected())));
+   if(!config.selected().isEmpty()) active=compile(com.prismora.pack.PackOptions.apply(new PackLoader().load(root.resolve("shaderpacks").resolve(config.selected())),config.options(config.selected())),config.performance());
   } catch(Exception e) { Prismora.LOGGER.error("Cannot restore selected shaderpack",e);active=Map.of(); }
  }
  public static void provide(Consumer<Pack> consumer) {
@@ -35,9 +45,10 @@ public final class PrismoraRenderer {
   var metadata=new Pack.Metadata(Component.literal("Prismora active shader"),PackCompatibility.COMPATIBLE,net.minecraft.world.flag.FeatureFlagSet.of(),List.of(),true);
   consumer.accept(new Pack(location,supplier,metadata,new PackSelectionConfig(true,Pack.Position.TOP,true)));
  }
- public static CompletableFuture<Void> activate(PackLoader.ShaderPack pack) {
+ public static CompletableFuture<Void> activate(PackLoader.ShaderPack pack) { return activate(pack,com.prismora.performance.PerformanceSettings.preset(com.prismora.performance.PerformanceSettings.Profile.MEDIUM)); }
+ public static CompletableFuture<Void> activate(PackLoader.ShaderPack pack,com.prismora.performance.PerformanceSettings settings) {
   Map<String,byte[]> compiled;
-  try{compiled=pack==null?Map.of():new PackCompiler().compile(pack);}catch(RuntimeException e){return CompletableFuture.failedFuture(e);}
+  try{compiled=pack==null?Map.of():compile(pack,settings);}catch(RuntimeException e){return CompletableFuture.failedFuture(e);}
   initialized=true;ready=false;inFlight=true;active=compiled;
   Minecraft mc=Minecraft.getInstance();
   return mc.reloadResourcePacks().thenRunAsync(()->{
@@ -48,7 +59,7 @@ public final class PrismoraRenderer {
  }
  public static void beforeFrame() {
   var mc=Minecraft.getInstance();
-  if(!active.isEmpty())Uniforms.update();
+  if(!active.isEmpty() && dynamicData)Uniforms.update();
   if(!ready && !inFlight && !active.isEmpty() && mc.isGameLoadFinished()) {
    try { validateCurrent();ready=true; }
    catch(Exception e) {
@@ -61,7 +72,7 @@ public final class PrismoraRenderer {
  }
  public static void validateCurrent() {
   if(active.isEmpty())return;
-  Uniforms.ensure();
+  if(dynamicData)Uniforms.ensure();
   var json=com.google.gson.JsonParser.parseString(new String(active.get("assets/minecraft/post_effect/end_of_frame.json"),java.nio.charset.StandardCharsets.UTF_8));
   var config=net.minecraft.client.renderer.PostChainConfig.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE,json).getOrThrow();
   var projection=new net.minecraft.client.renderer.Projection();projection.setupOrtho(0.1F,1000F,1F,1F,false);

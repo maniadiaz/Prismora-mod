@@ -8,3 +8,10 @@ Objetivo: controles comparables a otros cargadores de shaders y perfiles Entrada
 4. Validación y distribución: JUnit, OpenGL y Vulkan, JAR aislado, comparación controlada de perfiles y registro de hardware/resolución. Los resultados de RTX 5060 Ti se etiquetan como tales; otras gamas quedan sin verificar hasta obtener mediciones reales.
 
 Cada etapa se valida y sube con commit independiente. El plan adjunto de compatibilidad se conserva en PLAN_COMPATIBILIDAD_PROPUESTO.md. Sus fases de traducción GLSL, G-buffers y sombras son una ampliación separada; los perfiles no hacen compatibles packs OptiFine/Iris por sí solos. Las referencias del adjunto deben comprobarse antes de tratarlas como contratos implementados.
+
+
+## Avance
+
+- Etapa 1: presets y migración de configuración implementados y probados, commit 1f9a484.
+- Etapa 2: escala de buffers y poda de bloom comprobadas en JAR real Vulkan. Regresión de postproceso existente comprobada en OpenGL. Sliders con aplicación por lote, toggles y elecciones tipadas incorporados; las comprobaciones finales de UI y render se repiten en la etapa de validación.
+- La política adaptativa incluye pruebas deterministas de presión GPU, calentamiento, cooldown y límites de CPU/VSync; su integración y mediciones se cierran en la siguiente etapa.

@@ -72,6 +72,10 @@ public final class PackLoader {
                     String shader = pass.get(stage).getAsString(); safePath(shader);
                     if (!(stage.equals("vertex")?shader.endsWith(".vsh"):shader.endsWith(".fsh")) || !shader.matches("shaders/[a-z0-9_/]+\\.(vsh|fsh)") || !files.containsKey(shader)) throw new IOException("Missing or invalid shader: " + shader);
                 }
+                if(pass.has("scale")) {double scale=pass.get("scale").getAsDouble();if(!Double.isFinite(scale)||scale<0.25||scale>1)throw new IOException("Pass scale must be 0.25..1");}
+                if(pass.has("feature")) {
+                    if(!pass.get("feature").getAsString().equals("bloom") || !pass.has("bypass") || !pass.getAsJsonObject("inputs").has(pass.get("bypass").getAsString()))throw new IOException("Optional pass requires a known feature and bypass sampler");
+                }
                 String output = pass.get("output").getAsString();
                 if(output.equals("screen") && value!=passes.get(passes.size()-1))throw new IOException("Only the last pass can output to screen");
                 if (!output.matches("screen|[a-z][a-z0-9_]*")) throw new IOException("Invalid output");

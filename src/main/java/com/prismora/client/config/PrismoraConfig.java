@@ -54,6 +54,13 @@ public final class PrismoraConfig {
         validateId(id);String previous=selected;selected=id;
         try{save();}catch(IOException e){selected=previous;throw e;}
     }
+    public void setOptions(String pack,Map<String,Double> values)throws IOException{
+        validateId(pack);if(values.size()>16)throw new IOException("Too many options");
+        for(var entry:values.entrySet())if(!entry.getKey().matches("[a-z][a-z0-9_]{0,39}")||!Double.isFinite(entry.getValue()))throw new IOException("Invalid option");
+        if(!options.containsKey(pack)&&options.size()>=256)throw new IOException("Too many option presets");
+        var previous=options.put(pack,new HashMap<>(values));
+        try{save();}catch(IOException e){if(previous==null)options.remove(pack);else options.put(pack,previous);throw e;}
+    }
     public void setOption(String pack,String id,double value)throws IOException{
         validateId(pack);
         if(!id.matches("[a-z][a-z0-9_]{0,39}")||!Double.isFinite(value))throw new IOException("Invalid option");

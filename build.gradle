@@ -24,6 +24,7 @@ minecraft {
             workingDir = layout.projectDirectory.dir('run')
 
             systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
+            systemProperty 'prismora.performanceSmoke', providers.gradleProperty('prismoraPerformanceSmoke').getOrElse('false')
             systemProperty 'prismora.smoke', providers.gradleProperty('prismoraSmoke').getOrElse('false')
             systemProperty 'prismora.uiSmoke', providers.gradleProperty('prismoraUiSmoke').getOrElse('false')
             systemProperty 'prismora.renderSmoke', providers.gradleProperty('prismoraRenderSmoke').getOrElse('false')

@@ -6,6 +6,11 @@ import java.util.Map;
 import java.io.IOException;
 import static org.junit.jupiter.api.Assertions.*;
 class PackOptionsTest {
+ @Test void supportsTogglesAndNamedChoices()throws Exception{
+  var pack=new PackLoader().load(Path.of("examples/Prismora-Color"));var options=PackOptions.read(pack.manifest());
+  var toggle=options.stream().filter(o->o.id().equals("warm_tint")).findFirst().orElseThrow();assertEquals(PackOptions.Widget.TOGGLE,toggle.widget());assertEquals(0,toggle.normalize(0.1));
+  var choice=options.stream().filter(o->o.id().equals("exposure")).findFirst().orElseThrow();assertEquals("Bright",choice.labels().get(2));assertEquals(1.1,choice.normalize(1.08));
+ }
  @Test void appliesClampedOverrideWithoutChangingPack()throws Exception{
   var pack=new PackLoader().load(Path.of("examples/Prismora-Bloom"));
   var configured=PackOptions.apply(pack,Map.of("bloom_strength",2.0));

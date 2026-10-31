@@ -20,6 +20,7 @@ public final class SmokeProbe {
   }
  }
  @SubscribeEvent public static void tick(TickEvent.ClientTickEvent.Post event) {
+  if(Boolean.getBoolean("prismora.performanceSmoke")){PerformanceSmokeProbe.tick();return;}
   if(Boolean.getBoolean("prismora.renderSmoke")) { RenderSmokeProbe.tick(); return; }
   if(!Boolean.getBoolean("prismora.smoke")) return;
   Minecraft mc=Minecraft.getInstance();

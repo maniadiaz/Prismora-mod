@@ -10,7 +10,53 @@
       "inputs": {
         "SceneColor": "sceneColor"
       },
-      "output": "screen"
+      "output": "screen",
+      "uniforms": {
+        "ColorOptions": [
+          {
+            "type": "float",
+            "value": 1
+          },
+          {
+            "type": "float",
+            "value": 1
+          }
+        ]
+      }
     }
-  ]
+  ],
+  "options": {
+    "warm_tint": {
+      "label": "Warm tint",
+      "min": 0,
+      "max": 1,
+      "step": 1,
+      "default": 1,
+      "pass": "color",
+      "block": "ColorOptions",
+      "index": 0,
+      "widget": "toggle"
+    },
+    "exposure": {
+      "label": "Exposure",
+      "min": 0.9,
+      "max": 1.1,
+      "step": 0.1,
+      "default": 1.0,
+      "pass": "color",
+      "block": "ColorOptions",
+      "index": 1,
+      "widget": "choice",
+      "values": [
+        0.9,
+        1.0,
+        1.1
+      ],
+      "labels": [
+        "Dark",
+        "Normal",
+        "Bright"
+      ]
+    }
+  }
 }

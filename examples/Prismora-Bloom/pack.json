@@ -11,7 +11,10 @@
       "inputs": {
         "SceneColor": "sceneColor"
       },
-      "output": "bright"
+      "output": "bright",
+      "feature": "bloom",
+      "bypass": "SceneColor",
+      "scale": 0.5
     },
     {
       "name": "horizontal",
@@ -20,7 +23,10 @@
       "inputs": {
         "SceneColor": "bright"
       },
-      "output": "blur"
+      "output": "blur",
+      "feature": "bloom",
+      "bypass": "SceneColor",
+      "scale": 0.5
     },
     {
       "name": "vertical",
@@ -29,7 +35,10 @@
       "inputs": {
         "SceneColor": "blur"
       },
-      "output": "glow"
+      "output": "glow",
+      "feature": "bloom",
+      "bypass": "SceneColor",
+      "scale": 0.5
     },
     {
       "name": "composite",
@@ -47,7 +56,9 @@
             "value": 0.35
           }
         ]
-      }
+      },
+      "feature": "bloom",
+      "bypass": "SceneColor"
     }
   ],
   "options": {

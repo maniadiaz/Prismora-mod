@@ -7,5 +7,19 @@
   "prismora.loading": "Loading shaders...",
   "prismora.active": "Selection: ",
   "prismora.errors": "Error details",
-  "prismora.options": "Options"
+  "prismora.options": "Options",
+  "prismora.performance": "Performance",
+  "prismora.profile.entry": "Entry",
+  "prismora.profile.low": "Low",
+  "prismora.profile.medium": "Medium",
+  "prismora.profile.high": "High",
+  "prismora.profile.custom": "Custom",
+  "prismora.scale": "Shader scale",
+  "prismora.bloom": "Bloom",
+  "prismora.adaptive": "Adaptive",
+  "prismora.target": "Target",
+  "prismora.fallback": "Vanilla fallback",
+  "prismora.apply": "Apply",
+  "prismora.adapt.reduced": "Quality reduced to meet GPU budget",
+  "prismora.adapt.suspended": "Shader paused: target unmet; use Reload to resume"
 }
