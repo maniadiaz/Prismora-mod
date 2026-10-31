@@ -1,0 +1,10 @@
+package com.prismora.compat;
+import org.junit.jupiter.api.Test;
+import java.util.*;
+import java.nio.charset.StandardCharsets;
+import static org.junit.jupiter.api.Assertions.*;
+class ProgramCatalogTest {
+ @Test void retainsComputeSuffixesIntegrationsAndUnknownNames(){var files=new TreeMap<String,byte[]>();for(String path:List.of("shaders/world0/composite_a.csh","shaders/world0/dh_water.fsh","shaders/world0/clrwl_gbuffers.vsh","shaders/Unknown.fsh"))files.put(path,new byte[0]);var catalog=ProgramCatalog.scan(files);assertEquals(4,catalog.size());assertTrue(catalog.stream().anyMatch(p->p.baseProgram().equals("composite")&&p.stage().equals("csh")));assertTrue(catalog.stream().anyMatch(p->p.integration().equals("distant_horizons")));assertTrue(catalog.stream().anyMatch(p->p.integration().equals("flywheel")));assertTrue(catalog.stream().anyMatch(p->p.role().equals("unknown")));}
+ @Test void wrapperDefinesAreNotUserOptionsAndOldSavedFlagsAreMigrated()throws Exception{var files=LegacyPackTest.fixture();files.put("shaders/world0/gbuffers_terrain.vsh","#version 130\n#define VERTEX_SHADER\n#define OVERWORLD\n#define GBUFFERS_TERRAIN\n#define CUSTOM_CONTEXT\n#include \"/lib/terrain.glsl\"".getBytes(StandardCharsets.UTF_8));var pack=LegacyPack.inspect("test",files);assertFalse(pack.options().containsKey("OVERWORLD"));assertFalse(pack.options().containsKey("CUSTOM_CONTEXT"));assertFalse(pack.validated(Map.of("CUSTOM_CONTEXT","false")).containsKey("CUSTOM_CONTEXT"));assertTrue(pack.options().containsKey("BLOOM"));}
+ @Test void dimensionSelectionOverridesIndividualStages(){var files=new TreeMap<String,byte[]>();for(String path:List.of("shaders/final.vsh","shaders/final.fsh","shaders/world-1/final.fsh"))files.put(path,new byte[0]);var result=ProgramCatalog.dimension(ProgramCatalog.scan(files),"world-1");assertEquals(2,result.size());assertTrue(result.stream().anyMatch(p->p.path().equals("shaders/final.vsh")));assertTrue(result.stream().anyMatch(p->p.path().equals("shaders/world-1/final.fsh")));}
+}

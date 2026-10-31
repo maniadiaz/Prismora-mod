@@ -95,3 +95,11 @@ tasks.register('inspectShaderPack', JavaExec) {
     mainClass = 'com.prismora.compat.PackInspector'
     args providers.gradleProperty('shaderPack').getOrElse('shaderpacks/missing.zip')
 }
+
+tasks.register('auditShaderPack', JavaExec) {
+    dependsOn classes
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.prismora.compat.PackAudit'
+    maxHeapSize = '2g'
+    args providers.gradleProperty('shaderPack').getOrElse('shaderpacks/missing.zip'), providers.gradleProperty('auditOutput').getOrElse('.gradle/pack-audit.json'), providers.gradleProperty('auditSummary').getOrElse('.gradle/pack-audit-summary.json')
+}

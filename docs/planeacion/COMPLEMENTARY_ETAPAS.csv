@@ -1,6 +1,6 @@
 "etapa","titulo","estado","dependencias","hito","criterio_cierre","evidencia_cierre","commit_cierre"
-"E00","Inventario ejecutable y objetivo fijado","Parcial: base disponible; cierre Complementary pendiente","","A y B","Ningun requisito activo sin clasificar","",""
-"E01","Preprocesado y contrato del pack","Parcial: base disponible; cierre Complementary pendiente","E00","A y B","Contratos deterministas de perfiles y dimensiones","",""
+"E00","Inventario ejecutable y objetivo fijado","En curso: auditoria ejecutable de 71 configuraciones; revision semantica pendiente","","A y B","Ningun requisito activo sin clasificar","docs/pruebas/complementary/requirements-summary.json; docs/planeacion/EJECUCION_COMPLEMENTARY.md",""
+"E01","Preprocesado y contrato del pack","En curso: perfiles propiedades contexto y fallbacks corregidos y probados","E00","A y B","Contratos deterministas de perfiles y dimensiones","PackContractTest; ProgramCatalogTest; PreprocessorTest; regresion legacy OpenGL/Vulkan",""
 "E02","Recursos GPU y MRT","Pendiente","E01","A y B","GPU verifica MRT HDR SNORM flip y liberacion","",""
 "E03","Compilador GLSL del mundo","Parcial: base disponible; cierre Complementary pendiente","E01;E02","A y B","Programas graficos activos compilan en ambos backends","",""
 "E04","Terreno y materiales","Pendiente","E02;E03","A y B","Terreno real con IDs normales y tangentes correctos","",""

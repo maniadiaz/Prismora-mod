@@ -9,6 +9,8 @@ import java.util.zip.*;
 import java.io.*;
 import static org.junit.jupiter.api.Assertions.*;
 class LegacyPackTest {
+ @Test void defaultOutsideCommentRangeRemainsASelectableValue()throws Exception{var f=fixture();f.put("shaders/lib/settings.glsl","#define COLORED_LIGHTING 0 //[128 192 256]\n".getBytes(StandardCharsets.UTF_8));var p=LegacyPack.inspect("test",f);assertEquals(List.of("0","128","192","256"),p.options().get("COLORED_LIGHTING").values());assertEquals("192",p.validated(Map.of("COLORED_LIGHTING","192")).get("COLORED_LIGHTING"));}
+ @Test void acceptsEqualsSyntaxUsedByComplementary()throws Exception{var files=fixture();files.put("shaders/shaders.properties","profile.BASE=EXPOSURE=0.5 !BLOOM\nprofile.HIGH=profile.BASE EXPOSURE:2.0 BLOOM\n".getBytes(StandardCharsets.UTF_8));var pack=LegacyPack.inspect("test",files);var session=new LegacyMenuSession(pack,Map.of());session.profile("BASE");assertEquals("0.5",session.value("EXPOSURE"));assertEquals("false",session.value("BLOOM"));session.profile("HIGH");assertEquals("2.0",session.value("EXPOSURE"));assertEquals("true",session.value("BLOOM"));}
  @TempDir Path temp;
  static Map<String,byte[]> fixture(){
   var files=new TreeMap<String,byte[]>();

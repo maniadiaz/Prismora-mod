@@ -19,30 +19,29 @@ public record LegacyPack(String id,String name,Map<String,byte[]> files,Map<Stri
  private static final Pattern DEFINE=Pattern.compile("^\\s*(//\\s*)?#\\s*define\\s+([A-Za-z_]\\w*)(?:[ \\t]+([^/\\s]+))?[ \\t]*(?://(.*))?$");
  private static final Pattern CONSTANT=Pattern.compile("^\\s*const\\s+(?:int|float|bool)\\s+([A-Za-z_]\\w*)\\s*=\\s*([^;]+);\\s*//(.*)$");
  private static final Pattern VALUES=Pattern.compile("\\[([^]\\r\\n]+)]");
- private static final Pattern PROGRAM=Pattern.compile("shaders/(?:((?:world-?\\d+))/)?((?:gbuffers_[a-z0-9_]+|shadow(?:comp\\d*)?|prepare\\d*|deferred\\d*|composite\\d*|final))\\.(vsh|fsh|gsh|csh)");
  public static boolean isLegacy(PackLoader.ShaderPack pack){return pack!=null && pack.manifest().has("sourceFormat") && pack.manifest().get("sourceFormat").getAsString().equals("optifine");}
  public PackLoader.ShaderPack snapshot(){var json=new JsonObject();json.addProperty("sourceFormat","optifine");json.addProperty("name",name);json.addProperty("programCount",dimensions.values().stream().mapToInt(Map::size).sum());json.addProperty("optionCount",options.size());json.addProperty("requiresGeometry",requiresGeometry());return new PackLoader.ShaderPack(id,name,json,files);}
- public boolean requiresGeometry(){return dimensions.values().stream().flatMap(map->map.keySet().stream()).anyMatch(n->n.startsWith("gbuffers_")||n.startsWith("shadow"));}
- public Map<String,Program> programs(String dimension){var result=new TreeMap<>(dimensions.getOrDefault("base",Map.of()));String folder=switch(dimension){case "minecraft:the_nether"->"world-1";case "minecraft:the_end"->"world1";default->"world0";};result.putAll(dimensions.getOrDefault(folder,Map.of()));return Collections.unmodifiableMap(result);}
+ public boolean requiresGeometry(){return dimensions.values().stream().flatMap(map->map.keySet().stream()).anyMatch(n->n.startsWith("gbuffers_")||n.startsWith("shadow")||n.startsWith("dh_")||n.startsWith("clrwl_"));}
+ public Map<String,Program> programs(String dimension){var result=new TreeMap<String,Program>();String folder=switch(dimension){case "minecraft:the_nether"->"world-1";case "minecraft:the_end"->"world1";default->"world0";};for(var source:ProgramCatalog.dimension(ProgramCatalog.scan(files),folder)){if(source.role().equals("unknown"))continue;var previous=result.getOrDefault(source.name(),new Program(source.name(),null,null,null,null));result.put(source.name(),new Program(source.name(),source.stage().equals("vsh")?source.path():previous.vertex(),source.stage().equals("fsh")?source.path():previous.fragment(),source.stage().equals("gsh")?source.path():previous.geometry(),source.stage().equals("csh")?source.path():previous.compute()));}return Collections.unmodifiableMap(result);}
  public String text(String language,String key,String fallback){var lang=languages.getOrDefault(language.toLowerCase(Locale.ROOT),Map.of());return lang.getOrDefault(key,languages.getOrDefault("en_us",Map.of()).getOrDefault(key,fallback));}
  public Map<String,String> validated(Map<String,String> overrides)throws IOException {
   var result=new LinkedHashMap<String,String>();for(var option:options.values())result.put(option.name(),option.defaultValue());
   for(var entry:overrides.entrySet()){
-   if(entry.getKey().startsWith("program.")){if(!Set.of("true","false").contains(entry.getValue()))throw new IOException("Invalid program switch");result.put(entry.getKey(),entry.getValue());}
-   else{var option=options.get(entry.getKey());if(option==null)throw new IOException("Unknown pack option: "+entry.getKey());result.put(entry.getKey(),option.validate(entry.getValue()));}
+   if(entry.getKey().startsWith("program.")){if(!entry.getKey().matches("program\\.(?:world-?\\d+/)?[a-z0-9_]+")||!Set.of("true","false").contains(entry.getValue()))throw new IOException("Invalid program switch");result.put(entry.getKey(),entry.getValue());}
+   else{var option=options.get(entry.getKey());if(option==null){if(ProgramCatalog.reservedDefines(files).contains(entry.getKey()))continue;throw new IOException("Unknown pack option: "+entry.getKey());}result.put(entry.getKey(),option.validate(entry.getValue()));}
   }return result;
  }
  public static LegacyPack inspect(String id,Map<String,byte[]> files)throws IOException {
   var dimensions=new TreeMap<String,Map<String,Program>>();
-  for(String path:files.keySet()){
-   var match=PROGRAM.matcher(path);if(!match.matches())continue;
-   String dimension=match.group(1)==null?"base":match.group(1),name=match.group(2),stage=match.group(3);
+  for(var source:ProgramCatalog.scan(files)){
+   if(source.role().equals("unknown"))continue;
+   String path=source.path(),dimension=source.dimension(),name=source.name(),stage=source.stage();
    var programs=dimensions.computeIfAbsent(dimension,key->new TreeMap<>());var prior=programs.getOrDefault(name,new Program(name,null,null,null,null));
    programs.put(name,new Program(name,stage.equals("vsh")?path:prior.vertex(),stage.equals("fsh")?path:prior.fragment(),stage.equals("gsh")?path:prior.geometry(),stage.equals("csh")?path:prior.compute()));
   }
   if(dimensions.isEmpty())throw new IOException("No shader programs found: expected shaders/final.fsh, composite.fsh or gbuffers_*.fsh");
   var properties=PropertiesReader.parse(source(files,"shaders/shaders.properties"));
-  var options=new TreeMap<String,Option>();var notes=new ArrayList<String>();
+  var options=new TreeMap<String,Option>();var notes=new ArrayList<String>();var reserved=ProgramCatalog.reservedDefines(files);
   Set<String> sliders=new HashSet<>(tokens(properties.getOrDefault("sliders","")));
   for(var file:files.entrySet()){
    if(!file.getKey().startsWith("shaders/")||!file.getKey().matches(".*\\.(vsh|fsh|glsl|gsh|csh)$"))continue;
@@ -51,7 +50,7 @@ public record LegacyPack(String id,String name,Map<String,byte[]> files,Map<Stri
    for(int i=0;i<lines.length;i++){
     var define=DEFINE.matcher(lines[i]);var constant=CONSTANT.matcher(lines[i]);String optionName,defaultValue,comment;boolean toggle,isConstant=false;
     if(define.matches()){
-     optionName=define.group(2);if(guards.contains(optionName))continue;
+     optionName=define.group(2);if(guards.contains(optionName)||reserved.contains(optionName))continue;
      toggle=define.group(3)==null;defaultValue=toggle?(define.group(1)==null?"true":"false"):define.group(3);comment=Objects.toString(define.group(4),"");
      if(define.group(1)!=null&&!toggle)continue;
      if(!toggle&&!VALUES.matcher(comment).find())continue;
@@ -62,7 +61,8 @@ public record LegacyPack(String id,String name,Map<String,byte[]> files,Map<Stri
     var values=new ArrayList<String>();var range=VALUES.matcher(comment);
     if(toggle){values.add("false");values.add("true");}
     else if(range.find())values.addAll(tokens(range.group(1)));
-    if(values.size()<2||values.size()>512||!values.contains(defaultValue)||optionName.length()>128)continue;
+    if(!values.contains(defaultValue))values.add(0,defaultValue);
+    if(values.size()<2||values.size()>512||optionName.length()>128)continue;
     if(values.stream().anyMatch(v->!v.matches("[A-Za-z0-9_+.\\-]+")))continue;
     var option=new Option(optionName,defaultValue,List.copyOf(values),toggle,sliders.contains(optionName),file.getKey(),i+1,isConstant);
     var previous=options.putIfAbsent(optionName,option);if(previous!=null&&!previous.defaultValue().equals(defaultValue)&&notes.size()<100)notes.add("Different defaults for "+optionName+" at "+file.getKey()+":"+(i+1));
@@ -87,7 +87,7 @@ public record LegacyPack(String id,String name,Map<String,byte[]> files,Map<Stri
  private static Map<String,String> resolveProfile(String name,Map<String,String> raw,Map<String,Map<String,String>> done,Set<String> visiting)throws IOException {
   if(done.containsKey(name))return done.get(name);if(!raw.containsKey(name))throw new IOException("Unknown parent profile "+name);if(!visiting.add(name))throw new IOException("Profile inheritance cycle at "+name);
   var values=new LinkedHashMap<String,String>();
-  for(String token:tokens(raw.get(name))){if(token.startsWith("profile.")){values.putAll(resolveProfile(token.substring(8),raw,done,visiting));continue;}boolean negated=token.startsWith("!");String body=negated?token.substring(1):token;int colon=body.indexOf(':');String key=colon<0?body:body.substring(0,colon),value=colon<0?(negated?"false":"true"):body.substring(colon+1);values.put(key,value);}
+  for(String token:tokens(raw.get(name))){if(token.startsWith("profile.")){values.putAll(resolveProfile(token.substring(8),raw,done,visiting));continue;}boolean negated=token.startsWith("!");String body=negated?token.substring(1):token;int separator=body.indexOf(':');if(separator<0)separator=body.indexOf('=');String key=separator<0?body:body.substring(0,separator),value=separator<0?(negated?"false":"true"):body.substring(separator+1);if(key.isEmpty()||value.isEmpty()||(negated&&separator>=0))throw new IOException("Invalid profile assignment: "+token);values.put(key,value);}
   visiting.remove(name);var result=Collections.unmodifiableMap(values);done.put(name,result);return result;
  }
  private static List<String> tokens(String text){return text.isBlank()?List.of():List.of(text.trim().split("\\s+"));}

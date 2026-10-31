@@ -12,24 +12,25 @@ public final class LegacyAdapter {
  public static PackLoader.ShaderPack prepare(PackLoader.ShaderPack snapshot,Map<String,String> values,String dimension)throws IOException{
   var pack=LegacyPack.inspect(snapshot.id(),snapshot.files());
   if(pack.requiresGeometry())throw new IOException("This shaderpack requires gbuffers/shadow rendering. Options are available; geometry bridge is required before activation.");
-  var programs=pack.programs(dimension);var names=new ArrayList<String>();
+  var contract=new PackContract(pack,values,ShaderPreprocessor.environment(),dimension);var programs=contract.programs();var names=new ArrayList<String>();
+  String folder=switch(dimension){case "minecraft:the_nether"->"world-1";case "minecraft:the_end"->"world1";default->"world0";};
+  for(var source:ProgramCatalog.dimension(ProgramCatalog.scan(pack.files()),folder))if(source.stage().equals("csh")&&source.baseProgram().matches("composite\\d*|final")&&contract.enabled(source.baseProgram()))throw new IOException(source.path()+": active compute stage requires the compute bridge");
   for(String name:programs.keySet())if(name.matches("composite\\d*|final"))names.add(name);
   names.sort(Comparator.comparingInt(LegacyAdapter::order));if(!names.contains("final"))throw new IOException("Legacy postprocess pack needs final.fsh");
   var files=new TreeMap<>(snapshot.files());var manifest=new JsonObject();manifest.addProperty("formatVersion",1);manifest.addProperty("name",pack.name());var passes=new JsonArray();var sourceFiles=new JsonObject();String current="sceneColor";boolean dynamic=false;int count=0;
-  var selected=pack.validated(values);
   String defaultVertex="shaders/prismora_default.vsh";
   if(names.stream().anyMatch(n->programs.get(n).vertex()==null)){
    var augmented=new TreeMap<>(pack.files());augmented.put(defaultVertex,"#version 120\nvarying vec2 texcoord;\nvoid main(){gl_Position=ftransform();texcoord=gl_MultiTexCoord0.xy;}\n".getBytes(StandardCharsets.UTF_8));pack=LegacyPack.inspect(pack.id(),augmented);
   }
   for(String name:names){
-   if(selected.getOrDefault("program."+name,"true").equals("false")&&!name.equals("final"))continue;
+   if(!contract.enabled(name)){if(name.equals("final"))throw new IOException("Final shader is disabled; no final output is available");continue;}
    var program=programs.get(name);if(program.geometry()!=null||program.compute()!=null)throw new IOException(name+": geometry/compute shader stage needs additional bridge");
    if(program.fragment()==null)throw new IOException(name+": missing fragment shader");
-   String original=LegacyPack.source(pack.files(),program.fragment());var draw=Pattern.compile("(?:DRAWBUFFERS:([0-9A-F]+)|RENDERTARGETS:\\s*([0-9, ]+))").matcher(original);
-   if(draw.find()){String output=draw.group(1)!=null?draw.group(1):draw.group(2).replace(" ","");if(!output.equals("0"))throw new IOException(name+": multiple/nonzero color attachments require MRT bridge ("+output+")");}
    String vertex=program.vertex();var sourcePack=pack;
    if(vertex==null)vertex=defaultVertex;
    var vs=new ShaderPreprocessor(sourcePack,values,ShaderPreprocessor.environment()).process(vertex);var fs=new ShaderPreprocessor(sourcePack,values,ShaderPreprocessor.environment()).process(program.fragment());
+   String original=fs.source();var draw=Pattern.compile("(?:DRAWBUFFERS:([0-9A-F]+)|RENDERTARGETS:\\s*([0-9, ]+))").matcher(original);
+   if(draw.find()){String output=draw.group(1)!=null?draw.group(1):draw.group(2).replace(" ","");if(!output.equals("0"))throw new IOException(name+": multiple/nonzero color attachments require MRT bridge ("+output+")");}
    var translated=new LegacyTranslator().translate(vs,fs);dynamic|=translated.dynamic();translated.sourceFiles().forEach((id,path)->sourceFiles.addProperty(String.valueOf(id),path));
    String stem="shaders/prismora_legacy/p"+count;files.put(stem+".vsh",translated.vertex().getBytes(StandardCharsets.UTF_8));files.put(stem+".fsh",translated.fragment().getBytes(StandardCharsets.UTF_8));
    var pass=new JsonObject();pass.addProperty("name",name);pass.addProperty("vertex",stem+".vsh");pass.addProperty("fragment",stem+".fsh");var inputs=new JsonObject();

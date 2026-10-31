@@ -22,7 +22,7 @@ public final class PrismoraConfig {
     public Map<String,String> legacyOptions(String pack){return Map.copyOf(legacyOptions.getOrDefault(pack,Map.of()));}
     private static void validateLegacy(Map<String,String> values)throws IOException{
         if(values.size()>2048)throw new IOException("Too many legacy options");
-        for(var entry:values.entrySet())if(!entry.getKey().matches("[A-Za-z_]\\w{0,127}|program\\.[a-z0-9_]+")||!entry.getValue().matches("[A-Za-z0-9_+.\\-]{1,128}"))throw new IOException("Invalid legacy option");
+        for(var entry:values.entrySet())if(!entry.getKey().matches("[A-Za-z_]\\w{0,127}|program\\.(?:world-?\\d+/)?[a-z0-9_]+")||!entry.getValue().matches("[A-Za-z0-9_+.\\-]{1,128}"))throw new IOException("Invalid legacy option");
     }
     public void legacyOptions(String pack,Map<String,String> values)throws IOException{
         validateId(pack);validateLegacy(values);if(!legacyOptions.containsKey(pack)&&legacyOptions.size()>=64)throw new IOException("Too many legacy presets");
