@@ -83,3 +83,10 @@ tasks.withType(Jar).configureEach {
     from('docs/third-party/Forge-MDK-LICENSE.txt') { into 'META-INF/licenses' }
     manifest { attributes 'Implementation-Version': project.version }
 }
+
+tasks.register('inspectShaderPack', JavaExec) {
+    dependsOn classes
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.prismora.compat.PackInspector'
+    args providers.gradleProperty('shaderPack').getOrElse('shaderpacks/missing.zip')
+}

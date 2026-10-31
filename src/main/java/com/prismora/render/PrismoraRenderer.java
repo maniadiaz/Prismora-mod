@@ -21,6 +21,7 @@ public final class PrismoraRenderer {
  public static int compiledHeight(){return compiledHeight;}
  public static com.google.gson.JsonObject activeChain(){return active.isEmpty()?new com.google.gson.JsonObject():com.google.gson.JsonParser.parseString(new String(active.get("assets/minecraft/post_effect/end_of_frame.json"),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();}
  private static Map<String,byte[]> compile(PackLoader.ShaderPack pack,com.prismora.performance.PerformanceSettings settings){
+  if(com.prismora.compat.LegacyPack.isLegacy(pack))throw new IllegalArgumentException("OptiFine/Iris shaderpack detected. Metadata is readable; its rendering bridge is not enabled yet.");
   var window=Minecraft.getInstance().getWindow();compiledWidth=window.getWidth();compiledHeight=window.getHeight();
   var result=new PackCompiler().compile(pack,settings,compiledWidth,compiledHeight);
   dynamicData=new String(result.get("assets/minecraft/post_effect/end_of_frame.json"),java.nio.charset.StandardCharsets.UTF_8).contains("PrismoraData");return result;

@@ -8,38 +8,12 @@ import java.util.zip.*;
 
 /** Bounded snapshot: no open ZIP handles or unvalidated paths survive loading. */
 public final class PackLoader {
-    public static final int MAX_FILE = 1024 * 1024, MAX_TOTAL = 16 * MAX_FILE, MAX_ENTRIES = 256;
+    public static final int MAX_FILE = 1024 * 1024, MAX_TOTAL = PackFiles.MAX_TOTAL, MAX_ENTRIES = PackFiles.MAX_ENTRIES;
     public record ShaderPack(String id, String name, JsonObject manifest, Map<String, byte[]> files) {}
 
     public ShaderPack load(Path source) throws IOException {
-        Map<String, byte[]> files = new TreeMap<>();
-        if (Files.isSymbolicLink(source)) throw new IOException("Pack links are not supported");
-        if (Files.isDirectory(source)) {
-            Path real = source.toRealPath();
-            try (var paths = Files.walk(source)) {
-                var iterator=paths.iterator();int visited=0;
-                while(iterator.hasNext()) {
-                    Path path=iterator.next();
-                    if(++visited>MAX_ENTRIES*2)throw new IOException("Too many directory entries");
-                    if (Files.isSymbolicLink(path) || !path.toRealPath().startsWith(real)) throw new IOException("External link in pack");
-                    if (Files.isRegularFile(path)) {
-                        String name = source.relativize(path).toString().replace('\\', '/');
-                        try (var in = Files.newInputStream(path)) { add(files, name, in); }
-                    }
-                }
-            }
-        } else {
-            try (ZipFile zip = new ZipFile(source.toFile())) {
-                var entries = zip.entries();
-                int count = 0;
-                while (entries.hasMoreElements()) {
-                    var e = entries.nextElement();
-                    if (++count > MAX_ENTRIES) throw new IOException("Too many ZIP entries");
-                    safePath(e.isDirectory() ? e.getName().replaceAll("/$", "") : e.getName());
-                    if (!e.isDirectory()) try (var in = zip.getInputStream(e)) { add(files, e.getName(), in); }
-                }
-            }
-        }
+        Map<String, byte[]> files = PackFiles.read(source);
+        if(!files.containsKey("pack.json"))return com.prismora.compat.LegacyPack.inspect(source.getFileName().toString(),files).snapshot();
         try {
             byte[] metadata = files.get("pack.json");
             if (metadata == null || metadata.length > 65536) throw new IOException("Missing or oversized pack.json");
@@ -98,12 +72,5 @@ public final class PackLoader {
     public static void safePath(String name) throws IOException {
         if (name.isEmpty() || name.length() > 240 || name.startsWith("/") || name.contains("\\") || name.contains(":")) throw new IOException("Unsafe path: " + name);
         for (String part : name.split("/", -1)) if (part.isEmpty() || part.equals(".") || part.equals("..")) throw new IOException("Unsafe path: " + name);
-    }
-    private static void add(Map<String, byte[]> files, String name, InputStream in) throws IOException {
-        safePath(name);
-        if (files.size() >= MAX_ENTRIES || files.containsKey(name) || files.keySet().stream().anyMatch(n -> n.equalsIgnoreCase(name))) throw new IOException("Too many or duplicate files");
-        byte[] bytes = in.readNBytes(MAX_FILE + 1);
-        if (bytes.length > MAX_FILE || files.values().stream().mapToInt(b -> b.length).sum() + bytes.length > MAX_TOTAL) throw new IOException("Pack exceeds size limit");
-        files.put(name, bytes);
     }
 }
