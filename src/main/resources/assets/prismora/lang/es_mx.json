@@ -22,5 +22,12 @@
   "prismora.apply": "Aplicar",
   "prismora.adapt.reduced": "Calidad reducida por presupuesto de GPU",
   "prismora.adapt.suspended": "Shader pausado: no se cumple el objetivo; usa Recargar para reactivar",
-  "prismora.target.help": "Presupuesto del modo adaptativo; no limita los FPS del juego. La escala reduce el postproceso, no el render de chunks."
+  "prismora.target.help": "Presupuesto del modo adaptativo; no limita los FPS del juego. La escala reduce el postproceso, no el render de chunks.",
+  "prismora.back": "Atr\u00e1s",
+  "prismora.reset": "Restablecer",
+  "prismora.pack_profile": "Perfil del pack",
+  "prismora.export": "Exportar",
+  "prismora.import": "Importar",
+  "prismora.applied": "Opciones guardadas",
+  "prismora.imported": "Preset importado"
 }

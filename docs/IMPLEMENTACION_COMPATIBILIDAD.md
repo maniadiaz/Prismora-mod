@@ -24,3 +24,12 @@ Comando de inspección: `gradlew.bat inspectShaderPack -PshaderPack=<ruta>`.
 7. Artefactos y publicación (requiere cuenta/proyecto y licencia del titular).
 
 Ninguna etapa se marca como completa solo porque sus archivos existan. Las funciones no probadas se mantienen identificadas.
+
+
+## Etapa 2: menús específicos
+
+Implementados submenús y columnas definidos por el pack, perfiles heredados, traducciones y comentarios, sliders/interruptores/listas, borrador compartido entre categorías, reset e importación/exportación de presets JSON vinculados al pack. Las preferencias mantienen nombres y valores del pack (incluidas mayúsculas y valores no numéricos), separadas de las opciones nativas y de otros packs.
+
+Prueba real de cliente con Complementary r5.9.3: se abrió su raíz, se navegó a Performance Settings y se renderizaron sus controles. Capturas inspeccionables en docs/screenshots/legacy. Esta prueba verifica el menú, no el render de Complementary. El puente de render sigue rechazándolo explícitamente en este punto por requerir geometría.
+
+Los presets se exportan/importan desde config/prismora-presets/shader-<hash-del-pack>.json. Importar un preset de otro pack o valores fuera de su lista produce error y conserva el borrador anterior.

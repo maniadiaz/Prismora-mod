@@ -16,8 +16,8 @@ public final class ShaderPackScreen extends Screen {
  @Override protected void init() {
   int left=width/2-150;
   addRenderableWidget(Button.builder(Component.translatable("prismora.performance"),b->minecraft.gui.setScreen(new PerformanceScreen(this))).bounds(8,8,100,20).build());
-  var optionsButton=Button.builder(Component.translatable("prismora.options"),b->minecraft.gui.setScreen(new ShaderOptionsScreen(this))).bounds(width-108,8,100,20).build();
-  optionsButton.active=!controller.busy() && !controller.options().isEmpty();addRenderableWidget(optionsButton);
+  var optionsButton=Button.builder(Component.translatable("prismora.options"),b->{var legacy=controller.legacyInspected();if(legacy!=null)minecraft.gui.setScreen(new LegacyOptionsScreen(this,legacy,controller.legacyValues(legacy.id())));else minecraft.gui.setScreen(new ShaderOptionsScreen(this));}).bounds(width-108,8,100,20).build();
+  optionsButton.active=!controller.busy() && (!controller.options().isEmpty()||controller.legacyInspected()!=null);addRenderableWidget(optionsButton);
   int pageSize=Math.max(1,(height-160)/24);
   int pages=Math.max(1,(controller.entries().size()+pageSize-1)/pageSize);
   page=Math.min(page,pages-1);
@@ -36,7 +36,7 @@ public final class ShaderPackScreen extends Screen {
   addRenderableWidget(Button.builder(Component.translatable("prismora.folder"),b->Blaze3D.openPath(controller.manager().directory())).bounds(left,height-58,146,20).build());
   addRenderableWidget(Button.builder(Component.translatable("gui.done"),b->onClose()).bounds(left+154,height-58,146,20).build());
  }
- @Override public void tick(){String state=controller.selected()+controller.busy()+controller.error()+controller.suspended()+controller.generation();if(!state.equals(previousState)){previousState=state;rebuildWidgets();}}
+ @Override public void tick(){String state=controller.inspected()+controller.selected()+controller.busy()+controller.error()+controller.suspended()+controller.generation();if(!state.equals(previousState)){previousState=state;rebuildWidgets();}}
  @Override public void extractRenderState(GuiGraphicsExtractor graphics,int x,int y,float partial) {
   super.extractRenderState(graphics,x,y,partial);
   graphics.centeredText(font,title,width/2,15,0xFFFFFFFF);

@@ -22,5 +22,12 @@
   "prismora.apply": "Apply",
   "prismora.adapt.reduced": "Quality reduced to meet GPU budget",
   "prismora.adapt.suspended": "Shader paused: target unmet; use Reload to resume",
-  "prismora.target.help": "Adaptive mode budget; does not cap game FPS. Scaling reduces postprocessing, not chunk rendering."
+  "prismora.target.help": "Adaptive mode budget; does not cap game FPS. Scaling reduces postprocessing, not chunk rendering.",
+  "prismora.back": "Back",
+  "prismora.reset": "Reset",
+  "prismora.pack_profile": "Pack profile",
+  "prismora.export": "Export",
+  "prismora.import": "Import",
+  "prismora.applied": "Options saved",
+  "prismora.imported": "Preset imported"
 }

@@ -13,6 +13,18 @@ public final class ShaderController {
     private final PrismoraConfig config;
     private List<ShaderPackManager.Entry> entries = List.of();
     private String error = "";
+    private String inspected="";private int legacyGeneration=-1;private String legacyId="";private com.prismora.compat.LegacyPack legacyCache;
+    public String inspected(){return inspected.isEmpty()?selected():inspected;}
+    public com.prismora.compat.LegacyPack legacyInspected(){
+        String id=inspected();if(legacyGeneration==generation && legacyId.equals(id))return legacyCache;
+        legacyGeneration=generation;legacyId=id;legacyCache=null;
+        var entry=entries.stream().filter(e->e.id().equals(id)&&e.valid()).findFirst().orElse(null);
+        if(entry!=null && com.prismora.compat.LegacyPack.isLegacy(entry.pack()))try{legacyCache=com.prismora.compat.LegacyPack.inspect(entry.id(),entry.pack().files());}catch(IOException e){fail(e);}
+        return legacyCache;
+    }
+    public Map<String,String> legacyValues(String id){return config.legacyOptions(id);}
+    public void applyLegacyOptions(String id,Map<String,String> values){if(busy||closed)return;try{var pack=legacyInspected();if(pack==null||!pack.id().equals(id))throw new IOException("Shaderpack changed; reopen options");config.legacyOptions(id,pack.validated(values));var entry=entries.stream().filter(e->e.id().equals(id)).findFirst().orElseThrow();select(entry);}catch(Exception e){fail(e);}}
+
     private boolean busy;
     private PackWatcher watcher;
     private int generation;
@@ -57,7 +69,7 @@ public final class ShaderController {
             }
         } catch(IOException e) { fail(e); }
     }
-    public void select(ShaderPackManager.Entry entry){if(busy||closed)return;runtimePerformance=config.performance();suspended=false;performanceReason="";AdaptivePerformance.reset();activateEntry(entry);}
+    public void select(ShaderPackManager.Entry entry){if(busy||closed)return;if(entry!=null)inspected=entry.id();runtimePerformance=config.performance();suspended=false;performanceReason="";AdaptivePerformance.reset();activateEntry(entry);}
     private void activateEntry(ShaderPackManager.Entry entry) {
         if(busy||closed)return;
         if(entry != null && !entry.valid()) { error=entry.error();return; }

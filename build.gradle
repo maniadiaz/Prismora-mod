@@ -24,6 +24,8 @@ minecraft {
             workingDir = layout.projectDirectory.dir('run')
 
             systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
+            systemProperty 'prismora.legacyUiSmoke', providers.gradleProperty('prismoraLegacyUiSmoke').getOrElse('false')
+            systemProperty 'prismora.legacyPack', providers.gradleProperty('prismoraLegacyPack').getOrElse('ComplementaryReimagined_r5.9.3.zip')
             systemProperty 'prismora.performanceSmoke', providers.gradleProperty('prismoraPerformanceSmoke').getOrElse('false')
             systemProperty 'prismora.smoke', providers.gradleProperty('prismoraSmoke').getOrElse('false')
             systemProperty 'prismora.uiSmoke', providers.gradleProperty('prismoraUiSmoke').getOrElse('false')
