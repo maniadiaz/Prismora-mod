@@ -25,6 +25,7 @@ minecraft {
 
             args '--mixin.config=prismora.mixins.json'
             systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
+            systemProperty 'prismora.mrtSmoke', providers.gradleProperty('prismoraMrtSmoke').getOrElse('false')
             systemProperty 'prismora.legacyRenderSmoke', providers.gradleProperty('prismoraLegacyRenderSmoke').getOrElse('false')
             systemProperty 'prismora.compactUiSmoke', providers.gradleProperty('prismoraCompactUiSmoke').getOrElse('false')
             systemProperty 'prismora.legacyUiSmoke', providers.gradleProperty('prismoraLegacyUiSmoke').getOrElse('false')
