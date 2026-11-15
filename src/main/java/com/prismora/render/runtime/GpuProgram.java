@@ -9,13 +9,16 @@ import java.util.*;
 public final class GpuProgram implements AutoCloseable {
  private final CompiledRenderPipeline compiled;
  public GpuProgram(GpuDevice device,String name,String vertex,String fragment,List<GpuFormat> formats,Collection<String> samplers){
-  this(device,name,vertex,fragment,formats.stream().map(format->new ColorTargetState(Optional.empty(),format,ColorTargetState.WRITE_ALL)).toList(),samplers);
+  this(device,name,vertex,fragment,formats.stream().map(format->new ColorTargetState(Optional.empty(),format,ColorTargetState.WRITE_ALL)).toList(),samplers,Optional.empty());
  }
- public static GpuProgram withTargets(GpuDevice device,String name,String vertex,String fragment,List<TargetFormat> formats,Collection<String> samplers){return new GpuProgram(device,name,vertex,fragment,formats.stream().map(TargetFormat::state).toList(),samplers);}
- private GpuProgram(GpuDevice device,String name,String vertex,String fragment,Collection<ColorTargetState> descriptions,Collection<String> samplers){
+ public static GpuProgram withTargets(GpuDevice device,String name,String vertex,String fragment,List<TargetFormat> formats,Collection<String> samplers){return new GpuProgram(device,name,vertex,fragment,formats.stream().map(TargetFormat::state).toList(),samplers,Optional.empty());}
+ public static GpuProgram withDepth(GpuDevice device,String name,String vertex,String fragment,List<TargetFormat> formats,Collection<String> samplers,DepthStencilState depth){
+  return new GpuProgram(device,name,vertex,fragment,formats.stream().map(TargetFormat::state).toList(),samplers,Optional.of(depth));
+ }
+ private GpuProgram(GpuDevice device,String name,String vertex,String fragment,List<ColorTargetState> descriptions,Collection<String> samplers,Optional<DepthStencilState> depth){
   var states=List.copyOf(descriptions);
   if(states.isEmpty()||states.size()>Math.min(8,device.getDeviceInfo().limits().maxColorAttachments()))throw new IllegalArgumentException("Unsupported simultaneous color target count");
-  var id=Identifier.fromNamespaceAndPath("prismora","runtime/"+name);var builder=RenderPipeline.builder().withLocation(id).withVertexShader(id).withFragmentShader(id).withPrimitiveTopology(PrimitiveTopology.TRIANGLES).withCull(false);
+  var id=Identifier.fromNamespaceAndPath("prismora","runtime/"+name);var builder=RenderPipeline.builder().withLocation(id).withVertexShader(id).withFragmentShader(id).withPrimitiveTopology(PrimitiveTopology.TRIANGLES).withCull(false).withDepthStencilState(depth);
   for(int i=0;i<states.size();i++)builder.withColorTargetState(i,states.get(i));
   var layout=BindGroupLayout.builder();for(String sampler:new TreeSet<>(samplers))layout.withUniform(sampler,UniformType.COMBINED_IMAGE_SAMPLER);if(!samplers.isEmpty())builder.withBindGroupLayout(layout.build());
   try(var sources=new ShaderSource(){public String getShader(Identifier shader,ShaderType type){return type==ShaderType.VERTEX?vertex:fragment;}public CachedIncludeSource getInclude(Identifier include){return null;}public void close(){}}){compiled=device.compilePipeline(builder.build(),sources,Runnable::run).join().finishCompile();if(compiled==null)throw new IllegalStateException("Pipeline compilation failed for "+name);}

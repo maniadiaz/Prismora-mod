@@ -4,6 +4,7 @@ import com.prismora.render.runtime.*;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.GpuFormat;
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
 import com.mojang.renderpearl.api.textures.*;
 import net.minecraft.client.Minecraft;
 import java.util.*;
@@ -31,7 +32,8 @@ public final class MrtSmokeProbe {
    var original=targets.read(0).texture();try{var unexpected=targets.replacement(1024,1024,1);unexpected.close();throw new IllegalStateException("Attachment budget was not enforced");}catch(IllegalArgumentException expected){}if(original.isClosed())throw new IllegalStateException("Failed replacement closed the live targets");
    var replacement=targets.replacement(16,12,1024*1024);targets.close();if(!original.isClosed())throw new IllegalStateException("Replaced target was not released");targets=replacement;verify(0f,0f,"PRISMORA_MRT_RESIZE_TRANSACTION_PASS");state=3;
   }else if(state==3&&read){verifyFormats();state=4;
-  }else if(state==4&&read){targets.close();targets.close();for(int i=resources.size()-1;i>=0;i--)try{resources.get(i).close();}catch(Exception e){throw new RuntimeException(e);}resources.clear();Prismora.LOGGER.info("PRISMORA_MRT_SMOKE_PASS: native GPU MRT/HDR/SNORM/flip/persistence/resize/budget/release verified");state=5;mc.stop();}
+  }else if(state==4&&read){verifyDepth();state=5;
+  }else if(state==5&&read){targets.close();targets.close();for(int i=resources.size()-1;i>=0;i--)try{resources.get(i).close();}catch(Exception e){throw new RuntimeException(e);}resources.clear();Prismora.LOGGER.info("PRISMORA_MRT_SMOKE_PASS: native GPU MRT/HDR/SNORM/flip/persistence/resize/budget/release verified");state=6;mc.stop();}
  }
  private static <T extends AutoCloseable>T own(T value){resources.add(value);return value;}
  private static void verifyFormats(){
@@ -42,6 +44,29 @@ public final class MrtSmokeProbe {
   var writer=own(GpuProgram.withTargets(device,"mrt_all_formats",VERTEX,fragment.toString(),formats,List.of()));MrtPass.draw(device,writer,java.util.stream.IntStream.range(0,8).mapToObj(set::write).toList(),Map.of(),null);set.flip(specs.keySet());
   var inputs=new TreeMap<String,GpuTextureView>();var checker=new StringBuilder(HEADER);for(int i=0;i<8;i++){inputs.put("T"+i,set.read(i));checker.append("uniform sampler2D T").append(i).append(";\n");}checker.append("layout(location=0) out vec4 color;void main(){bool good=true;");for(int i=0;i<8;i++)checker.append("good=good&&all(lessThan(abs(texelFetch(T").append(i).append(",ivec2(0),0)-").append(expected[i]).append("),vec4(0.016)));\n");checker.append("color=good?vec4(0,1,0,1):vec4(1,0,1,1);}");
   var output=own(device.createTexture("Prismora format proof",GpuTexture.USAGE_RENDER_ATTACHMENT|GpuTexture.USAGE_COPY_SRC,GpuFormat.RGBA8_UNORM,1,1,1,1));var view=own(device.createTextureView(output));var sampler=own(device.createSampler(AddressMode.CLAMP_TO_EDGE,AddressMode.CLAMP_TO_EDGE,FilterMode.NEAREST,FilterMode.NEAREST,1,OptionalDouble.empty()));var check=own(new GpuProgram(device,"mrt_format_check",VERTEX,checker.toString(),List.of(GpuFormat.RGBA8_UNORM),inputs.keySet()));MrtPass.draw(device,check,List.of(view),inputs,sampler);readPixel(output,"PRISMORA_MRT_FORMATS_PASS");
+ }
+ private static void verifyDepth(){
+  read=false;
+  var device=RenderSystem.getDevice();
+  var depth=own(new GpuDepthTargets(device,4,4,1024));
+  var scene=depth.view(GpuDepthTargets.Stage.SCENE);
+  var colors=own(new GpuTargets(device,Map.of(0,new GpuTargets.Spec(TargetFormat.RGBA8,1,1,false,0,0,0,0)),4,4,1024));
+  float[] depths={0.25f,0.5f,0.75f,0.125f};
+  for(int i=0;i<depths.length;i++){
+   var fragment=HEADER+"layout(location=0) out vec4 color;void main(){gl_FragDepth="+depths[i]+";color=vec4(1);}";
+   var pass=own(GpuProgram.withDepth(device,"depth_writer_"+i,VERTEX,fragment,List.of(TargetFormat.RGBA8),List.of(),DepthStencilState.DEFAULT));
+   MrtPass.draw(device,pass,List.of(colors.write(0)),Map.of(),null,Optional.of(scene));
+   if(i==0)depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
+   if(i==1)depth.snapshot(GpuDepthTargets.Stage.BEFORE_HAND);
+  }
+  var inputs=Map.of("Scene",scene,"BeforeTranslucency",depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY),"BeforeHand",depth.view(GpuDepthTargets.Stage.BEFORE_HAND));
+  var output=own(device.createTexture("Prismora depth proof",GpuTexture.USAGE_RENDER_ATTACHMENT|GpuTexture.USAGE_COPY_SRC,GpuFormat.RGBA8_UNORM,1,1,1,1));
+  var view=own(device.createTextureView(output));
+  var sampler=own(device.createSampler(AddressMode.CLAMP_TO_EDGE,AddressMode.CLAMP_TO_EDGE,FilterMode.NEAREST,FilterMode.NEAREST,1,OptionalDouble.empty()));
+  var fragment=HEADER+"uniform sampler2D Scene;uniform sampler2D BeforeTranslucency;uniform sampler2D BeforeHand;layout(location=0) out vec4 color;void main(){ivec2 p=ivec2(1);vec3 depths=vec3(texelFetch(Scene,p,0).r,texelFetch(BeforeTranslucency,p,0).r,texelFetch(BeforeHand,p,0).r);bool good=all(lessThan(abs(depths-vec3(0.75,0.25,0.5)),vec3(0.0001)));color=good?vec4(0,1,0,1):vec4(1,0,1,1);}";
+  var check=own(new GpuProgram(device,"mrt_depth_check",VERTEX,fragment,List.of(GpuFormat.RGBA8_UNORM),inputs.keySet()));
+  MrtPass.draw(device,check,List.of(view),inputs,sampler);
+  readPixel(output,"PRISMORA_MRT_DEPTH_SNAPSHOTS_PASS");
  }
  private static void readPixel(GpuTexture output,String marker){var device=RenderSystem.getDevice();var buffer=own(device.createBuffer(()->"Prismora MRT pixel",GpuBuffer.USAGE_COPY_DST|GpuBuffer.USAGE_MAP_READ,4));var encoder=device.createCommandEncoder();encoder.copyTextureToBuffer(output,buffer,0,()->{try(var mapped=buffer.map(true,false)){var bytes=mapped.data();if((bytes.get(0)&255)!=0||(bytes.get(1)&255)!=255||(bytes.get(2)&255)!=0)throw new IllegalStateException("MRT GPU pixel validation failed: "+marker);Prismora.LOGGER.info("{}",marker);read=true;}},0);encoder.submit();}
  private static void verify(float hdr,float signed,String marker){

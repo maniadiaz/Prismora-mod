@@ -29,8 +29,8 @@ public final class LegacyAdapter {
    String vertex=program.vertex();var sourcePack=pack;
    if(vertex==null)vertex=defaultVertex;
    var vs=new ShaderPreprocessor(sourcePack,values,ShaderPreprocessor.environment()).process(vertex);var fs=new ShaderPreprocessor(sourcePack,values,ShaderPreprocessor.environment()).process(program.fragment());
-   String original=fs.source();var draw=Pattern.compile("(?:DRAWBUFFERS:([0-9A-F]+)|RENDERTARGETS:\\s*([0-9, ]+))").matcher(original);
-   if(draw.find()){String output=draw.group(1)!=null?draw.group(1):draw.group(2).replace(" ","");if(!output.equals("0"))throw new IOException(name+": multiple/nonzero color attachments require MRT bridge ("+output+")");}
+   var outputs=DrawBuffers.parse(fs);
+   if(!outputs.equals(List.of(OptionalInt.of(0))))throw new IOException(name+": multiple/nonzero color attachments require MRT bridge ("+outputs+")");
    var translated=new LegacyTranslator().translate(vs,fs);dynamic|=translated.dynamic();translated.sourceFiles().forEach((id,path)->sourceFiles.addProperty(String.valueOf(id),path));
    String stem="shaders/prismora_legacy/p"+count;files.put(stem+".vsh",translated.vertex().getBytes(StandardCharsets.UTF_8));files.put(stem+".fsh",translated.fragment().getBytes(StandardCharsets.UTF_8));
    var pass=new JsonObject();pass.addProperty("name",name);pass.addProperty("vertex",stem+".vsh");pass.addProperty("fragment",stem+".fsh");var inputs=new JsonObject();

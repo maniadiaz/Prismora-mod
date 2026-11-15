@@ -27,6 +27,14 @@ Reproducir con el ZIP oficial instalado localmente:
 
 El comando guarda los informes y falla si quedan errores de configuración/preprocesado o programas sin clasificar.
 
+## Recursos del cuadro (E02, en curso)
+
+Se verificaron ocho formatos de color, MRT, alternancia de buffers, persistencia, redimensionado y liberación desde el JAR empaquetado. El mismo ensayo dibuja cuatro profundidades con el estado reverse-Z de Minecraft y comprueba por lectura GPU la oclusión y los valores independientes de las capturas anteriores a transparencia y mano en el escenario de prueba. Pasó en OpenGL y Vulkan.
+
+`auditShaderPack` verifica también la asignación ordenada de ubicaciones de salida a `colortex`, incluidas las ubicaciones descartadas. Se ejecutó contra el ZIP de Complementary Reimagined r5.9.3 de la instancia Chill. Resultado de las 71 configuraciones y las tres dimensiones: cero problemas de análisis. SHA-256: `FED6C879E732CF7FC7BC6570EBB1DEF43235AA7E96F62859FBDBDBFA0B484B38`.
+
+Faltan asociar las directivas de formato, tamaño, limpieza y mipmaps con el grafo de renderizado del mundo, y tomar las capturas de profundidad en los pases reales de Minecraft.
+
 ## Hallazgo para E10
 
 Las fuentes de la plataforma fijada exponen únicamente VERTEX y FRAGMENT en `com/mojang/renderpearl/api/pipeline/ShaderType.java`. `GpuDevice`/`CommandEncoder` no exponen dispatch de compute; `UniformType` ofrece sampler, uniform buffer y texel buffer, sin contrato SSBO/storage-image. Por tanto, compute/imágenes/SSBO requieren ampliar el puente, no activar flags falsos. Este hallazgo no se marca como una implementación de E10 ni impide continuar el camino gráfico base.
