@@ -1,0 +1,206 @@
+package com.prismora.client;
+
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
+import com.mojang.renderpearl.api.pipeline.*;
+import com.mojang.renderpearl.api.textures.*;
+import com.prismora.Prismora;
+import com.prismora.render.runtime.GpuDepthTargets;
+import com.prismora.render.runtime.GpuTargets;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.ShaderManager;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayerGroup;
+import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.IdentityHashMap;
+import java.util.Map;
+
+/** Replays Minecraft's real opaque chunk draws into two independent color targets. */
+public final class TerrainSmokeProbe {
+    private static final int SIZE = 256;
+    private static final GpuFormat COLOR = GpuFormat.RGBA8_UNORM;
+    private static final String FRAGMENT = """
+            #version 330
+            #extension GL_ARB_separate_shader_objects : require
+            uniform sampler2D Sampler0;
+            layout(location=2) in vec4 vertexColor;
+            layout(location=3) in vec2 texCoord0;
+            layout(location=0) out vec4 surface;
+            layout(location=1) out vec4 coverage;
+            void main() {
+                vec4 texel = texture(Sampler0, texCoord0);
+                #ifdef ALPHA_CUTOUT
+                if (texel.a < ALPHA_CUTOUT) discard;
+                #endif
+                surface = vec4(texel.rgb * vertexColor.rgb, 1.0);
+                coverage = vec4(0.0, 1.0, 0.0, 1.0);
+            }
+            """;
+    private static final Map<RenderPipeline, CompiledRenderPipeline> pipelines = new IdentityHashMap<>();
+    private static GpuTargets colors;
+    private static GpuDepthTargets depth;
+    private static GpuBuffer readback;
+    private static boolean openingWorld, replaying, pending;
+    private static int ticks, worldTicks, readbacks;
+    private static volatile int verifiedPixels;
+
+    private TerrainSmokeProbe() {}
+
+    public static void tick() {
+        var client = Minecraft.getInstance();
+        if (++ticks > 1000) {
+            throw new IllegalStateException("Terrain MRT probe timed out after " + readbacks + " GPU reads; pending=" + pending);
+        }
+        if (!openingWorld && ticks > 60 && client.isGameLoadFinished() && client.gui.overlay() == null) {
+            openingWorld = true;
+            String id = SmokeWorlds.id();
+            if (Files.exists(client.gameDirectory.toPath().resolve("saves/" + id + "/level.dat"))) {
+                client.createWorldOpenFlows().openWorld(id, client::stop);
+            } else {
+                client.createWorldOpenFlows().createFreshLevel(id,
+                        new LevelSettings(id, GameType.CREATIVE, LevelSettings.DifficultySettings.DEFAULT, true, WorldDataConfiguration.DEFAULT),
+                        new WorldOptions(1234, false, false), WorldPresets::createNormalWorldDimensions, new TitleScreen());
+            }
+        }
+        if (client.player != null && ++worldTicks == 1) {
+            client.player.setXRot(75);
+        }
+        if (verifiedPixels > 0) {
+            readback.close();
+            depth.close();
+            colors.close();
+            pipelines.values().forEach(CompiledRenderPipeline::close);
+            pipelines.clear();
+            Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MRT_PASS: {} matching pixels from real chunk draws", verifiedPixels);
+            client.stop();
+        }
+    }
+
+    public static boolean shouldDraw() {
+        return worldTicks > 40 && !pending && verifiedPixels == 0 && Minecraft.getInstance().player != null;
+    }
+
+    public static CompiledRenderPipeline pipeline(RenderPipeline original) {
+        return replaying ? pipelines.get(original) : null;
+    }
+
+    public static void draw(ChunkSectionsToRender chunks, GpuSampler sampler, GpuTextureView atlas) {
+        if (!shouldDraw()) {
+            return;
+        }
+        var device = RenderSystem.getDevice();
+        if (colors == null) {
+            initialize();
+            Prismora.LOGGER.info("Prismora replaying terrain via {}", chunks.getClass().getSimpleName());
+        }
+        colors.clear(false);
+        var encoder = device.createCommandEncoder();
+        var scene = depth.view(GpuDepthTargets.Stage.SCENE);
+        encoder.clearDepthTexture(scene.texture(), 0);
+        var surface = colors.write(0);
+        var coverage = colors.write(1);
+        var descriptor = RenderPassDescriptor.builder(() -> "Prismora real opaque chunk draws")
+                .withColorAttachment(surface)
+                .withColorAttachment(coverage)
+                .withDepthAttachment(scene)
+                .build();
+        try (var pass = encoder.createRenderPass(descriptor)) {
+            RenderSystem.bindDefaultUniforms(pass);
+            replaying = true;
+            try {
+                chunks.renderGroup(ChunkSectionLayerGroup.OPAQUE, pass, sampler, atlas, false);
+            } finally {
+                replaying = false;
+            }
+        }
+        pending = true;
+        encoder.copyTextureToBuffer(surface.texture(), readback, 0, () -> {}, 0);
+        encoder.copyTextureToBuffer(coverage.texture(), readback, SIZE * SIZE * 4L, TerrainSmokeProbe::verify, 0);
+        encoder.submit();
+    }
+
+    private static void verify() {
+        readbacks++;
+        int matches = 0;
+        try (var mapping = readback.map(true, false)) {
+            var data = mapping.data();
+            int bytes = SIZE * SIZE * 4;
+            for (int i = 0; i < bytes; i += 4) {
+                boolean surface = (data.get(i + 3) & 255) == 255;
+                boolean coverage = (data.get(bytes + i + 1) & 255) == 255 && (data.get(bytes + i + 3) & 255) == 255;
+                if (surface != coverage) {
+                    throw new IllegalStateException("Terrain MRT attachments disagree at pixel " + i / 4);
+                }
+                if (surface) {
+                    matches++;
+                }
+            }
+        }
+        if (matches > 16) {
+            verifiedPixels = matches;
+        }
+        pending = false;
+    }
+
+    private static void initialize() {
+        var client = Minecraft.getInstance();
+        var device = RenderSystem.getDevice();
+        var spec = new GpuTargets.Spec(COLOR, 1, 1, false, 0, 0, 0, 0);
+        colors = new GpuTargets(device, Map.of(0, spec, 1, spec), SIZE, SIZE, 4L * 1024 * 1024);
+        depth = new GpuDepthTargets(device, SIZE, SIZE, 2L * 1024 * 1024);
+        readback = device.createBuffer(() -> "Prismora terrain MRT pixels",
+                GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, SIZE * SIZE * 8L);
+        var resources = client.getResourceManager();
+        try {
+            var vertex = resources.getResourceOrThrow(Identifier.withDefaultNamespace("shaders/core/terrain.vsh"));
+            var source = vertex.readAllAsString();
+            var includes = ShaderManager.listAllIncludes(resources);
+            try (var shaders = new ShaderSource() {
+                @Override public String getShader(Identifier id, ShaderType type) {
+                    return type == ShaderType.VERTEX ? source : FRAGMENT;
+                }
+                @Override public CachedIncludeSource getInclude(Identifier id) {
+                    return includes.get(id);
+                }
+                @Override public void close() {
+                    includes.values().forEach(CachedIncludeSource::close);
+                }
+            }) {
+                compile(shaders, RenderPipelines.SOLID_TERRAIN, false, false);
+                compile(shaders, RenderPipelines.CUTOUT_TERRAIN, false, true);
+                compile(shaders, RenderPipelines.SOLID_TERRAIN_MULTIDRAW, true, false);
+                compile(shaders, RenderPipelines.CUTOUT_TERRAIN_MULTIDRAW, true, true);
+            }
+        } catch (IOException failure) {
+            throw new IllegalStateException("Terrain vertex shader could not be read", failure);
+        }
+    }
+
+    private static void compile(ShaderSource shaders, RenderPipeline original, boolean multiDraw, boolean cutout) {
+        var id = Identifier.fromNamespaceAndPath("prismora", "terrain_probe/" + original.getLocation().getPath());
+        var snippet = multiDraw ? RenderPipelines.MULTIDRAW_TERRAIN_SNIPPET : RenderPipelines.TERRAIN_SNIPPET;
+        var builder = RenderPipeline.builder(snippet).withLocation(id).withVertexShader(id).withFragmentShader(id)
+                .withColorTargetState(0, new ColorTargetState(java.util.Optional.empty(), COLOR, ColorTargetState.WRITE_ALL))
+                .withColorTargetState(1, new ColorTargetState(java.util.Optional.empty(), COLOR, ColorTargetState.WRITE_ALL));
+        if (cutout) {
+            builder.withShaderDefine("ALPHA_CUTOUT", 0.5f);
+        }
+        var compiled = RenderSystem.getDevice().compilePipeline(builder.build(), shaders, Runnable::run).join().finishCompile();
+        if (compiled == null) {
+            throw new IllegalStateException("Terrain probe pipeline failed: " + id);
+        }
+        pipelines.put(original, compiled);
+    }
+}

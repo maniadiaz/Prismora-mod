@@ -41,6 +41,17 @@ El traductor de pases de pantalla puede emitir varias salidas legacy de `gl_Frag
 
 Faltan el traductor de vértices del mundo, uniforms y samplers del pack, y la prueba de compilación de sus programas reales.
 
+## Terreno real (E04, en curso)
+
+Un pase de prueba optativo vuelve a dibujar los chunks opacos que Minecraft preparó para el cuadro. Reutiliza las mallas, el atlas de bloques y el shader de vértices de Minecraft. Escribe en dos texturas de color y una de profundidad con un fragmento de diagnóstico. La lectura GPU verifica la cobertura coincidente en los dos adjuntos. Se probó el JAR con un mundo local en OpenGL y Vulkan en la RTX 5060 Ti.
+
+```powershell
+.\scripts\Test-PackagedClient.ps1 -Backend opengl -Probe terrain
+.\scripts\Test-PackagedClient.ps1 -Backend vulkan -Probe terrain
+```
+
+El `gbuffers_terrain` del Overworld en Complementary r5.9.3 declara `colortex0`, `colortex6` y `colortex4` para la configuración base auditada. Falta entregar sus atributos y uniformes reales y ejecutar el GLSL del ZIP sobre las mallas. Este ensayo deja la activación del pack pendiente.
+
 ## Hallazgo para E10
 
 Las fuentes de la plataforma fijada exponen únicamente VERTEX y FRAGMENT en `com/mojang/renderpearl/api/pipeline/ShaderType.java`. `GpuDevice`/`CommandEncoder` no exponen dispatch de compute; `UniformType` ofrece sampler, uniform buffer y texel buffer, sin contrato SSBO/storage-image. Por tanto, compute/imágenes/SSBO requieren ampliar el puente, no activar flags falsos. Este hallazgo no se marca como una implementación de E10 ni impide continuar el camino gráfico base.
