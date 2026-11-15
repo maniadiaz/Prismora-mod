@@ -52,13 +52,16 @@ public final class TerrainSmokeProbe {
     private static GpuTargets colors;
     private static GpuDepthTargets depth;
     private static GpuBuffer readback;
-    private static boolean openingWorld, replaying, pending;
+    private static boolean openingWorld, replaying, pending, finished;
     private static int ticks, worldTicks, readbacks;
     private static volatile int verifiedPixels;
 
     private TerrainSmokeProbe() {}
 
     public static void tick() {
+        if (finished) {
+            return;
+        }
         var client = Minecraft.getInstance();
         if (++ticks > 1000) {
             throw new IllegalStateException("Terrain MRT probe timed out after " + readbacks + " GPU reads; pending=" + pending);
@@ -78,6 +81,7 @@ public final class TerrainSmokeProbe {
             client.player.setXRot(75);
         }
         if (verifiedPixels > 0) {
+            finished = true;
             readback.close();
             depth.close();
             colors.close();
