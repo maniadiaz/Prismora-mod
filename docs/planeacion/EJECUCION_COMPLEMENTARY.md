@@ -56,11 +56,13 @@ El ensayo optativo con el ZIP real resuelve 32 194 estados de bloque contra el r
 
 Un segundo pase usa el mismo buffer con los índices de quads de Minecraft y su atlas de bloques. Escribe color, material y normales en el orden lógico 0, 6, 4 y usa un adjunto de profundidad. La lectura GPU verificó cobertura coincidente de los cuatro adjuntos en 2 408 píxeles de OpenGL y 1 780 de Vulkan. Las secciones de ambos ensayos se eligieron durante la compilación del mundo.
 
-El pase usa una proyección fija de diagnóstico y cubre modelos de bloque. Quedan la integración con la cámara y el envío normal de los chunks, los fluidos y la ejecución del GLSL de Complementary con sus recursos reales.
+El pase indexado ya usa la proyección nativa que Minecraft envía a la GPU y la rotación y posición de su cámara. La prueba elige una sección que intersecta la vista, entrega la transformación por uniform buffer y comprueba cobertura coincidente en 438 píxeles en OpenGL y 1 739 en Vulkan. Se probó la resta de la posición de cámara antes de convertir a float para secciones lejos del origen.
+
+El ensayo de terreno aún usa GLSL de diagnóstico. Quedan el envío normal de todos los chunks, los fluidos y la ejecución de gbuffers_terrain de Complementary con sus recursos reales.
 
 ```powershell
-.\scripts\Test-PackagedClient.ps1 -Backend opengl -Probe terrain -ComplementaryPack $zip
-.\scripts\Test-PackagedClient.ps1 -Backend vulkan -Probe terrain -ComplementaryPack $zip
+.\scripts\Test-PackagedClient.ps1 -Backend opengl -Probe terrain -ComplementaryPack $zip -FreshWorld
+.\scripts\Test-PackagedClient.ps1 -Backend vulkan -Probe terrain -ComplementaryPack $zip -FreshWorld
 ```
 
 ## Hallazgo para E10

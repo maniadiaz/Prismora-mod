@@ -17,6 +17,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 
 import java.util.List;
+import org.joml.Matrix4fc;
+import org.lwjgl.BufferUtils;
 import java.util.Map;
 
 final class TerrainIndexedSmokeProbe {
@@ -26,6 +28,7 @@ final class TerrainIndexedSmokeProbe {
             #extension GL_ARB_separate_shader_objects : require
             """;
     private static final String VERTEX = HEADER + """
+            layout(std140) uniform TerrainCamera { mat4 ClipFromSection; };
             layout(location=0) in vec3 Position;
             layout(location=1) in vec2 UV0;
             layout(location=2) in float mc_Entity;
@@ -34,11 +37,7 @@ final class TerrainIndexedSmokeProbe {
             layout(location=1) flat out float blockId;
             layout(location=2) flat out vec3 faceNormal;
             void main() {
-                vec3 p = Position - vec3(8.0);
-                float x = (p.x - p.z) * 0.047;
-                float y = (p.y - 0.40 * (p.x + p.z)) * 0.055;
-                float z = 0.55 + (p.x + p.y + p.z) * 0.012;
-                gl_Position = vec4(x, y, z, 1.0);
+                gl_Position = ClipFromSection * vec4(Position, 1.0);
                 uv = UV0;
                 blockId = mc_Entity;
                 faceNormal = Normal;
@@ -87,7 +86,7 @@ final class TerrainIndexedSmokeProbe {
 
     private TerrainIndexedSmokeProbe() {}
 
-    static void submit(GpuBuffer vertices, int faceCount, Runnable completed) {
+    static void submit(GpuBuffer vertices, int faceCount, Matrix4fc clipFromSection, Runnable completed) {
         var device = RenderSystem.getDevice();
         var format = GpuFormat.RGBA32_FLOAT;
         var spec = new GpuTargets.Spec(format, 1, 1, false, 0, 0, 0, 0);
@@ -95,14 +94,17 @@ final class TerrainIndexedSmokeProbe {
         var sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
         var readback = device.createBuffer(() -> "Prismora indexed terrain witness", GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, SIZE * SIZE * 4L);
         int depthUsage = GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING;
-        try (var targets = new GpuTargets(device, Map.of(0, spec, 6, spec, 4, spec), SIZE, SIZE, 2L * 1024 * 1024);
+        var matrixBytes = BufferUtils.createByteBuffer(16 * Float.BYTES);
+        clipFromSection.get(matrixBytes);
+        try (var camera = device.createBuffer(() -> "Prismora terrain camera", GpuBuffer.USAGE_UNIFORM, matrixBytes);
+             var targets = new GpuTargets(device, Map.of(0, spec, 6, spec, 4, spec), SIZE, SIZE, 2L * 1024 * 1024);
              var depth = device.createTexture("Prismora indexed terrain depth", depthUsage, GpuFormat.D32_FLOAT, SIZE, SIZE, 1, 1);
              var depthView = device.createTextureView(depth);
              var output = device.createTexture("Prismora indexed terrain result", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC,
                      GpuFormat.RGBA8_UNORM, SIZE, SIZE, 1, 1);
              var outputView = device.createTextureView(output);
              var program = GpuProgram.withVertices(device, "terrain_indexed_probe", VERTEX, FRAGMENT, List.of(format, format, format),
-                     TerrainVertexData.FORMAT, PrimitiveTopology.QUADS, List.of("BlockAtlas"), DepthStencilState.DEFAULT);
+                     TerrainVertexData.FORMAT, PrimitiveTopology.QUADS, List.of("BlockAtlas"), DepthStencilState.DEFAULT, List.of("TerrainCamera"));
              var check = new GpuProgram(device, "terrain_indexed_check", CHECK_VERTEX, CHECK_FRAGMENT,
                      List.of(GpuFormat.RGBA8_UNORM), List.of("Color", "Material", "NormalData", "Depth"))) {
             var encoder = device.createCommandEncoder();
@@ -120,6 +122,7 @@ final class TerrainIndexedSmokeProbe {
                 pass.setPipeline(program.compiled());
                 pass.setVertexBuffer(0, vertices.slice());
                 pass.setIndexBuffer(indexBuffer, indices.type());
+                pass.setUniform("TerrainCamera", camera);
                 pass.setUniform("BlockAtlas", atlas, sampler);
                 pass.drawIndexed(indexCount, 1, 0, 0, 0);
             }
@@ -141,7 +144,7 @@ final class TerrainIndexedSmokeProbe {
                 if (covered < 16) {
                     throw new IllegalStateException("Indexed terrain geometry did not cover enough pixels: " + covered);
                 }
-                Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_INDEXED_PASS: {} faces submitted, {} pixels with matching color, material, normal and depth",
+                Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_CAMERA_PASS: {} faces submitted, {} pixels with matching color, material, normal and depth",
                         faceCount, covered);
                 completed.run();
             }, 0);

@@ -66,7 +66,7 @@ final class TerrainVertexSmokeProbe {
 
     private TerrainVertexSmokeProbe() {}
 
-    static void submit(List<TerrainVertexData> faces, Runnable completed) {
+    static void submit(List<TerrainVertexData> faces, org.joml.Matrix4fc clipFromSection, Runnable completed) {
         var device = RenderSystem.getDevice();
         var remaining = new java.util.concurrent.atomic.AtomicInteger(2);
         Runnable resultReady = () -> {
@@ -123,7 +123,7 @@ final class TerrainVertexSmokeProbe {
                     } : () -> {}, 0);
                 }
                 encoder.submit();
-                TerrainIndexedSmokeProbe.submit(buffer, faces.size(), resultReady);
+                TerrainIndexedSmokeProbe.submit(buffer, faces.size(), clipFromSection, resultReady);
             } finally {
                 for (int i = 0; i < PLANES; i++) {
                     if (views[i] != null) views[i].close();

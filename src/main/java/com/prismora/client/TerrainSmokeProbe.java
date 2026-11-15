@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.core.SectionPos;
+import com.prismora.render.runtime.TerrainCameraFrame;
+import org.joml.Matrix4fc;
 import java.util.Map;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.Minecraft;
@@ -71,6 +73,8 @@ public final class TerrainSmokeProbe {
     private static volatile int verifiedPixels;
     private static volatile BlockMaterials materials;
     private static boolean vertexSubmitted;
+    private static volatile TerrainCameraFrame cameraFrame;
+    private static volatile boolean captureStarted;
     private static volatile boolean vertexVerified;
     private record SectionMesh(SectionPos section, List<TerrainVertexData> faces) {}
     private static final AtomicReference<SectionMesh> captured = new AtomicReference<>();
@@ -86,7 +90,7 @@ public final class TerrainSmokeProbe {
         }
         var client = Minecraft.getInstance();
         if (++ticks > 1000) {
-            throw new IllegalStateException("Terrain MRT probe timed out after " + readbacks + " GPU reads; pending=" + pending);
+            throw new IllegalStateException("Terrain MRT probe timed out after " + readbacks + " GPU reads; pending=" + pending + ", visible section captured=" + (captured.get() != null) + ", MRT pixels=" + verifiedPixels);
         }
         if (!openingWorld && ticks > 60 && client.isGameLoadFinished() && client.gui.overlay() == null) {
             openingWorld = true;
@@ -100,6 +104,7 @@ public final class TerrainSmokeProbe {
             }
         }
         if (client.player != null && ++worldTicks == 1) {
+            client.player.setXRot(75);
             if (!PACK_FILE.isEmpty()) {
                 materials = loadMaterials();
                 var leaves = Blocks.OAK_LEAVES.defaultBlockState();
@@ -108,14 +113,14 @@ public final class TerrainSmokeProbe {
                 if (dry != 10009 || wet != 10011) {
                     throw new IllegalStateException("Complementary oak leaf IDs differ: dry=" + dry + ", wet=" + wet);
                 }
+                captureStarted = true;
                 client.levelRenderer.invalidateCompiledGeometry(client.level, client.options, client.gameRenderer.mainCamera(), client.getBlockColors());
             }
-            client.player.setXRot(75);
         }
         var sample = captured.get();
-        if (verifiedPixels > 0 && sample != null && !vertexSubmitted) {
+        if (worldTicks > 40 && sample != null && cameraFrame != null && !vertexSubmitted) {
             vertexSubmitted = true;
-            TerrainVertexSmokeProbe.submit(sample.faces(), () -> vertexVerified = true);
+            TerrainVertexSmokeProbe.submit(sample.faces(), cameraFrame.clipFromSection(sample.section()), () -> vertexVerified = true);
         }
         if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || vertexVerified)) {
             if (materials != null) {
@@ -134,8 +139,18 @@ public final class TerrainSmokeProbe {
         }
     }
 
+    public static void captureCamera(Matrix4fc projection) {
+        if (materials != null) {
+            var state = Minecraft.getInstance().gameRenderer.gameRenderState().levelRenderState.cameraRenderState;
+            cameraFrame = new TerrainCameraFrame(projection, state.viewRotationMatrix, state.pos);
+        }
+    }
+
     public static void beginSection(SectionPos section) {
-        if (materials != null && captured.get() == null && captureInProgress.compareAndSet(false, true)) {
+        var frame = cameraFrame;
+        if (captureStarted && materials != null && captured.get() == null && frame != null
+                && new org.joml.FrustumIntersection(frame.clipFromSection(section)).testAab(0, 0, 0, 16, 16, 16)
+                && captureInProgress.compareAndSet(false, true)) {
             if (captured.get() == null) {
                 building.set(new SectionMesh(section, new ArrayList<>()));
             } else {
@@ -155,11 +170,32 @@ public final class TerrainSmokeProbe {
         var result = building.get();
         if (result != null) {
             building.remove();
-            if (result.faces().stream().anyMatch(face -> face.materialId() >= 0)) {
+            if (containsVisibleFace(result)) {
                 captured.set(new SectionMesh(result.section(), List.copyOf(result.faces())));
+                Prismora.LOGGER.info("Prismora camera terrain section {} captured with {} faces", result.section(), result.faces().size());
             }
             captureInProgress.set(false);
         }
+    }
+
+    private static boolean containsVisibleFace(SectionMesh mesh) {
+        var clip = cameraFrame.clipFromSection(mesh.section());
+        var position = new org.joml.Vector4f();
+        for (var face : mesh.faces()) {
+            float x = 0, y = 0, z = 0;
+            for (var corner : face.corners()) {
+                x += corner.x();
+                y += corner.y();
+                z += corner.z();
+            }
+            clip.transform(position.set(x * 0.25f, y * 0.25f, z * 0.25f, 1f));
+            float margin = position.w * 0.85f;
+            if (position.w > 0f && Math.abs(position.x) < margin && Math.abs(position.y) < margin
+                    && position.z > -position.w && position.z < position.w) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static int materialId(BlockState state) {
