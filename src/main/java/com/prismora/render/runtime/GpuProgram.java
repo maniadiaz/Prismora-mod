@@ -17,7 +17,10 @@ public final class GpuProgram implements AutoCloseable {
   return new GpuProgram(device,name,vertex,fragment,formats.stream().map(TargetFormat::state).toList(),samplers,Optional.of(depth),null,PrimitiveTopology.TRIANGLES);
  }
  public static GpuProgram withVertices(GpuDevice device,String name,String vertex,String fragment,List<GpuFormat> formats,VertexFormat vertexFormat,PrimitiveTopology topology){
-  return new GpuProgram(device,name,vertex,fragment,formats.stream().map(format->new ColorTargetState(Optional.empty(),format,ColorTargetState.WRITE_ALL)).toList(),List.of(),Optional.empty(),vertexFormat,topology);
+  return withVertices(device,name,vertex,fragment,formats,vertexFormat,topology,List.of(),null);
+ }
+ public static GpuProgram withVertices(GpuDevice device,String name,String vertex,String fragment,List<GpuFormat> formats,VertexFormat vertexFormat,PrimitiveTopology topology,Collection<String> samplers,DepthStencilState depth){
+  return new GpuProgram(device,name,vertex,fragment,formats.stream().map(format->new ColorTargetState(Optional.empty(),format,ColorTargetState.WRITE_ALL)).toList(),samplers,Optional.ofNullable(depth),vertexFormat,topology);
  }
  private GpuProgram(GpuDevice device,String name,String vertex,String fragment,List<ColorTargetState> descriptions,Collection<String> samplers,Optional<DepthStencilState> depth,VertexFormat vertexFormat,PrimitiveTopology topology){
   var states=List.copyOf(descriptions);

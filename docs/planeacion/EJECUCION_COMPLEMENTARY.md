@@ -54,7 +54,9 @@ El `gbuffers_terrain` del Overworld en Complementary r5.9.3 declara `colortex0`,
 
 El ensayo optativo con el ZIP real resuelve 32 194 estados de bloque contra el registro y las etiquetas de Minecraft. Distingue las hojas de roble secas (10009) y anegadas (10011). Captura todos los quads que emite el compilador de modelos de bloque para una sección real y guarda sus posiciones relativas a la sección, UV, IDs, normales, tangentes y centros UV en un buffer de vértices. Un pase de diagnóstico escribe esos valores en cuatro adjuntos RGBA32F. La comparación GPU verificó todos los vértices capturados: 904 de 226 caras en OpenGL y 3 120 de 780 caras en Vulkan.
 
-Esta prueba usa un buffer de diagnóstico y cubre modelos de bloque. Quedan la integración con el envío normal de chunks, los fluidos y la ejecución del GLSL de Complementary con sus matrices y recursos reales.
+Un segundo pase usa el mismo buffer con los índices de quads de Minecraft y su atlas de bloques. Escribe color, material y normales en el orden lógico 0, 6, 4 y usa un adjunto de profundidad. La lectura GPU verificó cobertura coincidente de los cuatro adjuntos en 2 408 píxeles de OpenGL y 1 780 de Vulkan. Las secciones de ambos ensayos se eligieron durante la compilación del mundo.
+
+El pase usa una proyección fija de diagnóstico y cubre modelos de bloque. Quedan la integración con la cámara y el envío normal de los chunks, los fluidos y la ejecución del GLSL de Complementary con sus recursos reales.
 
 ```powershell
 .\scripts\Test-PackagedClient.ps1 -Backend opengl -Probe terrain -ComplementaryPack $zip

@@ -68,6 +68,12 @@ final class TerrainVertexSmokeProbe {
 
     static void submit(List<TerrainVertexData> faces, Runnable completed) {
         var device = RenderSystem.getDevice();
+        var remaining = new java.util.concurrent.atomic.AtomicInteger(2);
+        Runnable resultReady = () -> {
+            if (remaining.decrementAndGet() == 0) {
+                completed.run();
+            }
+        };
         int vertices = Math.multiplyExact(faces.size(), CORNERS);
         int height = (vertices + WIDTH - 1) / WIDTH;
         int planeBytes = WIDTH * height * 4 * Float.BYTES;
@@ -113,10 +119,11 @@ final class TerrainVertexSmokeProbe {
                         try (readback; var mapping = readback.map(true, false)) {
                             verify(faces, planeBytes, mapping.data().order(ByteOrder.nativeOrder()));
                         }
-                        completed.run();
+                        resultReady.run();
                     } : () -> {}, 0);
                 }
                 encoder.submit();
+                TerrainIndexedSmokeProbe.submit(buffer, faces.size(), resultReady);
             } finally {
                 for (int i = 0; i < PLANES; i++) {
                     if (views[i] != null) views[i].close();
