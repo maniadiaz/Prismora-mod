@@ -35,6 +35,12 @@ Se verificaron ocho formatos de color, MRT, alternancia de buffers, persistencia
 
 Faltan asociar las directivas de formato, tamaño, limpieza y mipmaps con el grafo de renderizado del mundo, y tomar las capturas de profundidad en los pases reales de Minecraft.
 
+## Traducción GLSL (E03, en curso)
+
+El traductor de pases de pantalla puede emitir varias salidas legacy de `gl_FragData` según la directiva del fragmento. El ensayo del JAR usa un shader sintético con `RENDERTARGETS: 12,0`: traduce GLSL, compila en ShaderC, enlaza texturas según el orden indicado y lee los valores HDR y SNORM correctos en GPU. Pasó en OpenGL y Vulkan. También se verificó el shaderpack de regresión legacy en ambos backends durante esta etapa.
+
+Faltan el traductor de vértices del mundo, uniforms y samplers del pack, y la prueba de compilación de sus programas reales.
+
 ## Hallazgo para E10
 
 Las fuentes de la plataforma fijada exponen únicamente VERTEX y FRAGMENT en `com/mojang/renderpearl/api/pipeline/ShaderType.java`. `GpuDevice`/`CommandEncoder` no exponen dispatch de compute; `UniformType` ofrece sampler, uniform buffer y texel buffer, sin contrato SSBO/storage-image. Por tanto, compute/imágenes/SSBO requieren ampliar el puente, no activar flags falsos. Este hallazgo no se marca como una implementación de E10 ni impide continuar el camino gráfico base.

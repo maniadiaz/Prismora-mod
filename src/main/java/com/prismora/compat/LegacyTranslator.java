@@ -6,6 +6,7 @@ import java.util.regex.*;
 /** Explicit legacy postprocess subset. Unknown contracts are rejected rather than given fake uniforms. */
 public final class LegacyTranslator {
  public record Program(String vertex,String fragment,Set<String> samplers,boolean dynamic,Map<Integer,String> sourceFiles) {}
+ public record MrtProgram(Program shaders,List<OptionalInt> outputSlots) {}
  private record Edit(int start,int end,String replacement) {}
  private static final Pattern VARYING=Pattern.compile("\\b(varying|in|out)\\s+(?:(flat|smooth)\\s+)?(float|int|vec[234]|ivec[234]|mat[234])\\s+(\\w+)\\s*(\\[\\s*\\d+\\s*])?\\s*;");
  private static final Pattern UNIFORM=Pattern.compile("\\buniform\\s+(sampler2D|sampler2DShadow|float|int|bool|vec[234]|ivec[234]|mat[234])\\s+([^;{}]+)\\s*;");
@@ -13,12 +14,19 @@ public final class LegacyTranslator {
   Map.entry("gbufferProjection","prismoraMatrix(16)"),Map.entry("gbufferProjectionInverse","prismoraMatrix(32)"),Map.entry("gbufferModelView","prismoraMatrix(48)"),Map.entry("gbufferModelViewInverse","prismoraMatrix(64)"),
   Map.entry("viewWidth","prismoraResolution().x"),Map.entry("viewHeight","prismoraResolution().y"),Map.entry("aspectRatio","(prismoraResolution().x/prismoraResolution().y)"),Map.entry("worldTime","int(prismoraDayTicks())"),Map.entry("frameTimeCounter","mod(prismoraTime(),3600.0)"),Map.entry("cameraPosition","prismoraCamera()"),Map.entry("sunAngle","fract(prismoraSunAngle()/6.28318530718)"),Map.entry("rainStrength","(1.0-prismoraValue(12))"));
  public Program translate(ShaderPreprocessor.Result vertex,ShaderPreprocessor.Result fragment)throws IOException{
+  return translate(vertex,fragment,1);
+ }
+ public MrtProgram translateFullscreenMrt(ShaderPreprocessor.Result vertex,ShaderPreprocessor.Result fragment)throws IOException{
+  var slots=DrawBuffers.parse(fragment);
+  return new MrtProgram(translate(vertex,fragment,slots.size()),slots);
+ }
+ private Program translate(ShaderPreprocessor.Result vertex,ShaderPreprocessor.Result fragment,int outputSlots)throws IOException{
   String vs=vertex.source(),fs=fragment.source();var locations=new LinkedHashMap<String,Integer>();int slot=0;
   for(String source:List.of(vs,fs)){var matcher=VARYING.matcher(mask(source));while(matcher.find()){String direction=matcher.group(1);boolean interstage=direction.equals("varying")||(source==vs&&direction.equals("out"))||(source==fs&&direction.equals("in"));if(interstage&&!locations.containsKey(matcher.group(4))){locations.put(matcher.group(4),slot);int size=matcher.group(3).startsWith("mat")?Integer.parseInt(matcher.group(3).substring(3)):1;if(matcher.group(5)!=null)size*=Integer.parseInt(matcher.group(5).replaceAll("[^0-9]",""));slot+=size;}}}
-  var samplers=new LinkedHashSet<String>();boolean[] dynamic={false};String outVs=stage(vs,true,locations,samplers,dynamic),outFs=stage(fs,false,locations,samplers,dynamic);
+  var samplers=new LinkedHashSet<String>();boolean[] dynamic={false};String outVs=stage(vs,true,locations,samplers,dynamic,outputSlots),outFs=stage(fs,false,locations,samplers,dynamic,outputSlots);
   var files=new LinkedHashMap<Integer,String>(vertex.sourceFiles());files.putAll(fragment.sourceFiles());return new Program(outVs,outFs,Collections.unmodifiableSet(samplers),dynamic[0],Collections.unmodifiableMap(files));
  }
- private String stage(String source,boolean vertex,Map<String,Integer> locations,Set<String> samplers,boolean[] dynamic)throws IOException{
+ private String stage(String source,boolean vertex,Map<String,Integer> locations,Set<String> samplers,boolean[] dynamic,int outputSlots)throws IOException{
   String masked=mask(source);var edits=new ArrayList<Edit>();var macros=new StringBuilder();var uniforms=UNIFORM.matcher(masked);
   while(uniforms.find()){
    String type=uniforms.group(1);
@@ -67,9 +75,9 @@ public final class LegacyTranslator {
    masked=mask(source);boolean color=Pattern.compile("\\bgl_FragColor\\b").matcher(masked).find(),data=Pattern.compile("\\bgl_FragData\\b").matcher(masked).find();
    if(color&&data)throw new IOException("Mixed gl_FragColor/gl_FragData output contracts");
    if(color){outputs.append("layout(location=0) out vec4 prismoraFragColor;\n");source=replaceCode(source,"\\bgl_FragColor\\b","prismoraFragColor");}
-   if(data){outputs.append("layout(location=0) out vec4 prismoraFragData[1];\n");source=replaceCode(source,"\\bgl_FragData\\b","prismoraFragData");}
-   // Modern single output without explicit location.
-   if(!color&&!data){var out=Pattern.compile("(?m)^(\\s*)out(\\s+vec4\\s+\\w+\\s*;)").matcher(mask(source));var list=new ArrayList<Edit>();int location=0;while(out.find()){if(location>0)throw new IOException("Multiple render targets require MRT bridge");list.add(new Edit(out.start(),out.end(),out.group(1)+"layout(location="+(location++)+") out"+source.substring(out.start(2),out.end(2))));}source=apply(source,list);}
+   if(data){outputs.append("layout(location=0) out vec4 prismoraFragData["+outputSlots+"];\n");source=replaceCode(source,"\\bgl_FragData\\b","prismoraFragData");}
+   // Implicit modern outputs are assigned in declaration order.
+   if(!color&&!data){var out=Pattern.compile("(?m)^(\\s*)out(\\s+vec4\\s+\\w+\\s*;)").matcher(mask(source));var list=new ArrayList<Edit>();int location=0;while(out.find()){if(location>=outputSlots)throw new IOException("More fragment outputs than configured target slots");list.add(new Edit(out.start(),out.end(),out.group(1)+"layout(location="+(location++)+") out"+source.substring(out.start(2),out.end(2))));}source=apply(source,list);}
   }
   String quad=vertex?"vec2 prismoraQuadUv(){ return vec2(float((gl_VertexIndex<<1)&2),float(gl_VertexIndex&2)); }\n":"";
   String include=dynamic[0]?"#include \"prismora:uniforms.glsl\"\n":"";

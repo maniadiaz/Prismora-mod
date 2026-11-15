@@ -1,5 +1,7 @@
 package com.prismora.client;
 import com.prismora.Prismora;
+import com.prismora.compat.LegacyTranslator;
+import com.prismora.compat.ShaderPreprocessor;
 import com.prismora.render.runtime.*;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.GpuFormat;
@@ -20,8 +22,13 @@ public final class MrtSmokeProbe {
   var device=RenderSystem.getDevice();
   if(state==0){
    targets=new GpuTargets(device,Map.of(0,new GpuTargets.Spec(FORMATS.get(0),1,1,true,0,0,0,0),12,new GpuTargets.Spec(FORMATS.get(1),1,1,false,0,0,0,0)),8,8,1024*1024);
-   var write=own(new GpuProgram(device,"mrt_smoke_write",VERTEX,HEADER+"layout(location=0) out vec4 hdr;layout(location=1) out vec4 signedColor;void main(){hdr=vec4(2.5,0.25,0.5,1.0);signedColor=vec4(-0.75,0.5,0.25,1.0);}",FORMATS,List.of()));
-   MrtPass.draw(device,write,List.of(targets.write(0),targets.write(12)),Map.of(),null);targets.flip(List.of(0,12));
+   var vertex=shader("probe.vsh","void main(){gl_Position=ftransform();}");
+   var fragment=shader("probe.fsh","/* RENDERTARGETS: 12,0 */"+'\n'+"void main(){gl_FragData[1]=vec4(2.5,0.25,0.5,1.0);gl_FragData[0]=vec4(-0.75,0.5,0.25,1.0);}");
+   var translated=translate(vertex,fragment);
+   var shaders=translated.shaders();
+   var outputs=translated.outputSlots().stream().mapToInt(OptionalInt::orElseThrow).mapToObj(targets::write).toList();
+   var write=own(new GpuProgram(device,"mrt_smoke_write",shaders.vertex(),shaders.fragment(),outputs.stream().map(view->view.texture().getFormat()).toList(),shaders.samplers()));
+   MrtPass.draw(device,write,outputs,Map.of(),null);targets.flip(List.of(0,12));
    var sampler=own(device.createSampler(AddressMode.CLAMP_TO_EDGE,AddressMode.CLAMP_TO_EDGE,FilterMode.NEAREST,FilterMode.NEAREST,1,OptionalDouble.empty()));
    var update=own(new GpuProgram(device,"mrt_smoke_update",VERTEX,HEADER+"uniform sampler2D HdrSampler;uniform sampler2D SignedSampler;layout(location=0) out vec4 hdr;layout(location=1) out vec4 signedColor;void main(){hdr=texelFetch(HdrSampler,ivec2(0),0)+vec4(1.0,0.0,0.0,0.0);signedColor=texelFetch(SignedSampler,ivec2(0),0)+vec4(0.25,0.0,0.0,0.0);}",FORMATS,List.of("HdrSampler","SignedSampler")));
    try{MrtPass.draw(device,update,List.of(targets.read(0),targets.write(12)),Map.of("HdrSampler",targets.read(0),"SignedSampler",targets.read(12)),sampler);throw new IllegalStateException("Read/write alias was accepted");}catch(IllegalArgumentException expected){}
@@ -36,6 +43,14 @@ public final class MrtSmokeProbe {
   }else if(state==5&&read){targets.close();targets.close();for(int i=resources.size()-1;i>=0;i--)try{resources.get(i).close();}catch(Exception e){throw new RuntimeException(e);}resources.clear();Prismora.LOGGER.info("PRISMORA_MRT_SMOKE_PASS: native GPU MRT/HDR/SNORM/flip/persistence/resize/budget/release verified");state=6;mc.stop();}
  }
  private static <T extends AutoCloseable>T own(T value){resources.add(value);return value;}
+ private static ShaderPreprocessor.Result shader(String name,String source){
+  String path="shaders/"+name;
+  return new ShaderPreprocessor.Result(List.of(new ShaderPreprocessor.Line(path,1,source)),Map.of(1,path));
+ }
+ private static LegacyTranslator.MrtProgram translate(ShaderPreprocessor.Result vertex,ShaderPreprocessor.Result fragment){
+  try{return new LegacyTranslator().translateFullscreenMrt(vertex,fragment);}
+  catch(java.io.IOException e){throw new IllegalStateException("MRT GLSL translation failed",e);}
+ }
  private static void verifyFormats(){
   read=false;var device=RenderSystem.getDevice();var formats=List.of(TargetFormat.values());var specs=new TreeMap<Integer,GpuTargets.Spec>();for(int i=0;i<formats.size();i++)specs.put(i,new GpuTargets.Spec(formats.get(i),1,1,false,0,0,0,0));var set=own(new GpuTargets(device,specs,4,4,1024*1024));
   String[] values={"vec4(2.5,0.25,0.5,0.0)","vec4(0.25)","vec4(-2.0,3.5,0.25,0.0)","vec4(0.2,0.4,0.6,0.0)","vec4(-0.75,0.5,0.25,0.0)","vec4(-2.5,4.0,0.5,0.25)","vec4(0.2,0.4,0.6,0.75)","vec4(-0.75,0.5,0.25,-0.5)"};
