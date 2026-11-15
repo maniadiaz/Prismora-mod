@@ -13,7 +13,7 @@ import com.prismora.pack.PackLoader;
 import com.prismora.Prismora;
 import com.prismora.render.runtime.GpuDepthTargets;
 import com.prismora.render.runtime.GpuTargets;
-import com.prismora.render.runtime.TerrainQuadAttributes;
+import com.prismora.render.runtime.TerrainVertexData;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -66,8 +66,9 @@ public final class TerrainSmokeProbe {
     private static int ticks, worldTicks, readbacks;
     private static volatile int verifiedPixels;
     private static volatile BlockMaterials materials;
-    private record MaterialSample(int id, TerrainQuadAttributes attributes) {}
-    private static final AtomicReference<MaterialSample> firstMaterial = new AtomicReference<>();
+    private static boolean vertexSubmitted;
+    private static volatile boolean vertexVerified;
+    private static final AtomicReference<TerrainVertexData> firstMaterial = new AtomicReference<>();
     private static final String PACK_FILE = System.getProperty("prismora.terrainPack", "");
 
     private TerrainSmokeProbe() {}
@@ -104,10 +105,15 @@ public final class TerrainSmokeProbe {
             }
             client.player.setXRot(75);
         }
-        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || firstMaterial.get() != null)) {
+        var sample = firstMaterial.get();
+        if (verifiedPixels > 0 && sample != null && !vertexSubmitted) {
+            vertexSubmitted = true;
+            TerrainVertexSmokeProbe.submit(sample, () -> vertexVerified = true);
+        }
+        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || vertexVerified)) {
             if (materials != null) {
                 Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MATERIAL_PASS: {} states mapped; real emitted quad ID {}; oak leaves 10009/10011; world quad {}",
-                        materials.size(), firstMaterial.get().id(), firstMaterial.get().attributes());
+                        materials.size(), sample.materialId(), sample.attributes());
                 materials = null;
             }
             finished = true;
@@ -128,12 +134,13 @@ public final class TerrainSmokeProbe {
 
     public static void recordMaterial(int id, BakedQuad quad) {
         if (firstMaterial.get() == null) {
-            var attrs = TerrainQuadAttributes.from(quad);
+            var sample = TerrainVertexData.from(id, quad);
+            var attrs = sample.attributes();
             float dot = attrs.nx() * attrs.tx() + attrs.ny() * attrs.ty() + attrs.nz() * attrs.tz();
             if (!(Math.abs(dot) < 0.0001f && Float.isFinite(attrs.midU()) && Float.isFinite(attrs.midV()))) {
                 throw new IllegalStateException("Invalid terrain quad attributes: " + attrs);
             }
-            firstMaterial.compareAndSet(null, new MaterialSample(id, attrs));
+            firstMaterial.compareAndSet(null, sample);
         }
     }
 
