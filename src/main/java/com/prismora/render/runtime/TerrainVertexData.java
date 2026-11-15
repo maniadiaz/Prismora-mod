@@ -29,12 +29,12 @@ public record TerrainVertexData(int materialId, TerrainQuadAttributes attributes
         }
     }
 
-    public static TerrainVertexData from(int materialId, BakedQuad quad) {
+    public static TerrainVertexData from(int materialId, float x, float y, float z, BakedQuad quad) {
         var corners = new ArrayList<Corner>(4);
         for (int index = 0; index < 4; index++) {
             var position = quad.position(index);
             long uv = quad.packedUV(index);
-            corners.add(new Corner(position.x(), position.y(), position.z(), UVPair.unpackU(uv), UVPair.unpackV(uv)));
+            corners.add(new Corner(x + position.x(), y + position.y(), z + position.z(), UVPair.unpackU(uv), UVPair.unpackV(uv)));
         }
         return new TerrainVertexData(materialId, TerrainQuadAttributes.from(quad), corners);
     }

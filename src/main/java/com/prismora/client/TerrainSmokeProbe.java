@@ -19,6 +19,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.IdentityHashMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import net.minecraft.core.SectionPos;
 import java.util.Map;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.Minecraft;
@@ -68,7 +72,10 @@ public final class TerrainSmokeProbe {
     private static volatile BlockMaterials materials;
     private static boolean vertexSubmitted;
     private static volatile boolean vertexVerified;
-    private static final AtomicReference<TerrainVertexData> firstMaterial = new AtomicReference<>();
+    private record SectionMesh(SectionPos section, List<TerrainVertexData> faces) {}
+    private static final AtomicReference<SectionMesh> captured = new AtomicReference<>();
+    private static final AtomicBoolean captureInProgress = new AtomicBoolean();
+    private static final ThreadLocal<SectionMesh> building = new ThreadLocal<>();
     private static final String PACK_FILE = System.getProperty("prismora.terrainPack", "");
 
     private TerrainSmokeProbe() {}
@@ -105,15 +112,15 @@ public final class TerrainSmokeProbe {
             }
             client.player.setXRot(75);
         }
-        var sample = firstMaterial.get();
+        var sample = captured.get();
         if (verifiedPixels > 0 && sample != null && !vertexSubmitted) {
             vertexSubmitted = true;
-            TerrainVertexSmokeProbe.submit(sample, () -> vertexVerified = true);
+            TerrainVertexSmokeProbe.submit(sample.faces(), () -> vertexVerified = true);
         }
         if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || vertexVerified)) {
             if (materials != null) {
-                Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MATERIAL_PASS: {} states mapped; real emitted quad ID {}; oak leaves 10009/10011; world quad {}",
-                        materials.size(), sample.materialId(), sample.attributes());
+                Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MATERIAL_PASS: {} states mapped; section {} contains {} block-model faces; oak leaves 10009/10011",
+                        materials.size(), sample.section(), sample.faces().size());
                 materials = null;
             }
             finished = true;
@@ -127,21 +134,50 @@ public final class TerrainSmokeProbe {
         }
     }
 
-    public static int materialId(BlockState state) {
-        var table = materials;
-        return table == null || firstMaterial.get() != null ? -1 : table.id(state);
+    public static void beginSection(SectionPos section) {
+        if (materials != null && captured.get() == null && captureInProgress.compareAndSet(false, true)) {
+            if (captured.get() == null) {
+                building.set(new SectionMesh(section, new ArrayList<>()));
+            } else {
+                captureInProgress.set(false);
+            }
+        }
     }
 
-    public static void recordMaterial(int id, BakedQuad quad) {
-        if (firstMaterial.get() == null) {
-            var sample = TerrainVertexData.from(id, quad);
-            var attrs = sample.attributes();
-            float dot = attrs.nx() * attrs.tx() + attrs.ny() * attrs.ty() + attrs.nz() * attrs.tz();
-            if (!(Math.abs(dot) < 0.0001f && Float.isFinite(attrs.midU()) && Float.isFinite(attrs.midV()))) {
-                throw new IllegalStateException("Invalid terrain quad attributes: " + attrs);
-            }
-            firstMaterial.compareAndSet(null, sample);
+    public static boolean capturingSection() {
+        return materials != null && building.get() != null;
+    }
+
+    public static void endSection() {
+        if (materials == null) {
+            return;
         }
+        var result = building.get();
+        if (result != null) {
+            building.remove();
+            if (result.faces().stream().anyMatch(face -> face.materialId() >= 0)) {
+                captured.set(new SectionMesh(result.section(), List.copyOf(result.faces())));
+            }
+            captureInProgress.set(false);
+        }
+    }
+
+    public static int materialId(BlockState state) {
+        return materials.id(state);
+    }
+
+    public static void recordMaterial(int id, float x, float y, float z, BakedQuad quad) {
+        var faces = building.get().faces();
+        if (faces.size() >= 65_536) {
+            throw new IllegalStateException("Section exceeds the terrain probe's face budget");
+        }
+        var face = TerrainVertexData.from(id, x, y, z, quad);
+        var attrs = face.attributes();
+        float dot = attrs.nx() * attrs.tx() + attrs.ny() * attrs.ty() + attrs.nz() * attrs.tz();
+        if (!(Math.abs(dot) < 0.0001f && Float.isFinite(attrs.midU()) && Float.isFinite(attrs.midV()))) {
+            throw new IllegalStateException("Invalid terrain quad attributes: " + attrs);
+        }
+        faces.add(face);
     }
 
     private static BlockMaterials loadMaterials() {

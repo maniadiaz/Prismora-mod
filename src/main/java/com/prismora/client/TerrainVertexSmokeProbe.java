@@ -13,11 +13,13 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Collections;
+import java.util.List;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 
 final class TerrainVertexSmokeProbe {
     private static final int CORNERS = 4;
     private static final int PLANES = 4;
-    private static final int PLANE_BYTES = CORNERS * 4 * Float.BYTES;
+    private static final int WIDTH = 256;
     private static final String VERTEX = """
             #version 330
             #extension GL_ARB_separate_shader_objects : require
@@ -32,11 +34,11 @@ final class TerrainVertexSmokeProbe {
             layout(location=2) flat out vec3 normal;
             layout(location=3) flat out vec4 tangent;
             void main() {
-                int corner = gl_VertexIndex / 3;
-                int local = gl_VertexIndex % 3;
-                float x = -0.75 + float(corner) * 0.5;
-                vec2 offset = local == 0 ? vec2(-0.23, -1.0) : (local == 1 ? vec2(0.23, -1.0) : vec2(0.0, 1.0));
-                gl_Position = vec4(x + offset.x, offset.y, 0.0, 1.0);
+                int column = gl_VertexIndex % %WIDTH%;
+                int row = gl_VertexIndex / %WIDTH%;
+                vec2 pixel = vec2(column, row) + vec2(0.5);
+                gl_Position = vec4(pixel * 2.0 / vec2(%WIDTH%, %HEIGHT%) - 1.0, 0.0, 1.0);
+                gl_PointSize = 1.0;
                 positionAndId = vec4(Position, mc_Entity);
                 uvAndCenter = vec4(UV0, mc_midTexCoord);
                 normal = Normal;
@@ -64,14 +66,17 @@ final class TerrainVertexSmokeProbe {
 
     private TerrainVertexSmokeProbe() {}
 
-    static void submit(TerrainVertexData data, Runnable completed) {
+    static void submit(List<TerrainVertexData> faces, Runnable completed) {
         var device = RenderSystem.getDevice();
-        int vertices = CORNERS * 3;
+        int vertices = Math.multiplyExact(faces.size(), CORNERS);
+        int height = (vertices + WIDTH - 1) / WIDTH;
+        int planeBytes = WIDTH * height * 4 * Float.BYTES;
+        String vertex = VERTEX.replace("%WIDTH%", Integer.toString(WIDTH)).replace("%HEIGHT%", Integer.toString(height));
         ByteBuffer staging = MemoryUtil.memAlloc(vertices * TerrainVertexData.FORMAT.getVertexSize());
         GpuBuffer buffer;
         try {
             for (int index = 0; index < vertices; index++) {
-                data.writeVertex(staging, index / 3);
+                faces.get(index / CORNERS).writeVertex(staging, index % CORNERS);
             }
             buffer = device.createBuffer(() -> "Prismora terrain attributes", GpuBuffer.USAGE_VERTEX, staging.flip());
         } finally {
@@ -82,17 +87,17 @@ final class TerrainVertexSmokeProbe {
         var descriptor = RenderPassDescriptor.builder(() -> "Prismora terrain attribute round trip");
         var textures = new GpuTexture[PLANES];
         var readback = device.createBuffer(() -> "Prismora terrain attribute readback",
-                GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, PLANES * PLANE_BYTES);
+                GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, PLANES * planeBytes);
         var encoder = device.createCommandEncoder();
         try (buffer;
-             var program = GpuProgram.withVertices(device, "terrain_vertex_probe", VERTEX, FRAGMENT, formats,
-                     TerrainVertexData.FORMAT)) {
+             var program = GpuProgram.withVertices(device, "terrain_vertex_probe", vertex, FRAGMENT, formats,
+                     TerrainVertexData.FORMAT, PrimitiveTopology.POINTS)) {
             var views = new com.mojang.renderpearl.api.textures.GpuTextureView[PLANES];
             try {
                 for (int i = 0; i < PLANES; i++) {
                     textures[i] = device.createTexture("Prismora terrain vertex plane " + i,
                             GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC | GpuTexture.USAGE_COPY_DST,
-                            formats.get(i), CORNERS, 1, 1, 1);
+                            formats.get(i), WIDTH, height, 1, 1);
                     views[i] = device.createTextureView(textures[i]);
                     encoder.clearColorTexture(textures[i], new org.joml.Vector4f(0));
                     descriptor.withColorAttachment(views[i]);
@@ -104,9 +109,9 @@ final class TerrainVertexSmokeProbe {
                 }
                 for (int i = 0; i < PLANES; i++) {
                     boolean last = i == PLANES - 1;
-                    encoder.copyTextureToBuffer(textures[i], readback, (long) i * PLANE_BYTES, last ? () -> {
+                    encoder.copyTextureToBuffer(textures[i], readback, (long) i * planeBytes, last ? () -> {
                         try (readback; var mapping = readback.map(true, false)) {
-                            verify(data, mapping.data().order(ByteOrder.nativeOrder()));
+                            verify(faces, planeBytes, mapping.data().order(ByteOrder.nativeOrder()));
                         }
                         completed.run();
                     } : () -> {}, 0);
@@ -124,21 +129,22 @@ final class TerrainVertexSmokeProbe {
         }
     }
 
-    private static void verify(TerrainVertexData data, ByteBuffer result) {
-        var attrs = data.attributes();
-        for (int index = 0; index < CORNERS; index++) {
-            var corner = data.corners().get(index);
-            check(result, index, 0, corner.x(), corner.y(), corner.z(), data.materialId());
-            check(result, index, 1, corner.u(), corner.v(), attrs.midU(), attrs.midV());
-            check(result, index, 2, attrs.nx(), attrs.ny(), attrs.nz(), 1f);
-            check(result, index, 3, attrs.tx(), attrs.ty(), attrs.tz(), attrs.handedness());
+    private static void verify(List<TerrainVertexData> faces, int planeBytes, ByteBuffer result) {
+        for (int index = 0; index < faces.size() * CORNERS; index++) {
+            var data = faces.get(index / CORNERS);
+            var attrs = data.attributes();
+            var corner = data.corners().get(index % CORNERS);
+            check(result, index, planeBytes, 0, corner.x(), corner.y(), corner.z(), data.materialId());
+            check(result, index, planeBytes, 1, corner.u(), corner.v(), attrs.midU(), attrs.midV());
+            check(result, index, planeBytes, 2, attrs.nx(), attrs.ny(), attrs.nz(), 1f);
+            check(result, index, planeBytes, 3, attrs.tx(), attrs.ty(), attrs.tz(), attrs.handedness());
         }
-        Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_VERTEX_PASS: four real quad vertices matched, material {}", data.materialId());
+        Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_VERTEX_PASS: {} vertices from {} real block-model faces matched", faces.size() * CORNERS, faces.size());
     }
 
-    private static void check(ByteBuffer result, int vertex, int plane, float... expected) {
+    private static void check(ByteBuffer result, int vertex, int planeBytes, int plane, float... expected) {
         for (int component = 0; component < expected.length; component++) {
-            int offset = plane * PLANE_BYTES + (vertex * 4 + component) * Float.BYTES;
+            int offset = plane * planeBytes + (vertex * 4 + component) * Float.BYTES;
             float actual = result.getFloat(offset);
             if (!(Math.abs(expected[component] - actual) <= 0.00001f)) {
                 throw new IllegalStateException("Terrain vertex " + vertex + ", plane " + plane + ", component "

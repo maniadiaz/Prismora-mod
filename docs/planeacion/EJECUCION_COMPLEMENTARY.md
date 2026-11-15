@@ -52,7 +52,9 @@ Un pase de prueba optativo vuelve a dibujar los chunks opacos que Minecraft prep
 
 El `gbuffers_terrain` del Overworld en Complementary r5.9.3 declara `colortex0`, `colortex6` y `colortex4` para la configuración base auditada. Falta entregar sus atributos y uniformes reales y ejecutar el GLSL del ZIP sobre las mallas. Este ensayo deja la activación del pack pendiente.
 
-El ensayo optativo del ZIP real también resuelve `block.properties` contra el registro y las etiquetas de Minecraft. Conserva el orden de declaración para que prevalezca la primera asignación explícita aplicable. En OpenGL y Vulkan resolvió 32 194 estados, distinguió hojas secas (10009) y anegadas (10011) y verificó el ID, la normal, la tangente y el centro UV durante la emisión de un quad real. Un pase de diagnóstico adicional empaqueta los atributos de esa cara en un buffer real de vértices. El shader de prueba escribe posición, UV, ID, normal, tangente y centro UV en cuatro adjuntos RGBA32F y compara la lectura GPU de las cuatro esquinas. Pasó en OpenGL y Vulkan. Queda integrar el formato en las mallas completas de los chunks, traducir el GLSL de Complementary y enlazarle las matrices y demás datos del juego.
+El ensayo optativo con el ZIP real resuelve 32 194 estados de bloque contra el registro y las etiquetas de Minecraft. Distingue las hojas de roble secas (10009) y anegadas (10011). Captura todos los quads que emite el compilador de modelos de bloque para una sección real y guarda sus posiciones relativas a la sección, UV, IDs, normales, tangentes y centros UV en un buffer de vértices. Un pase de diagnóstico escribe esos valores en cuatro adjuntos RGBA32F. La comparación GPU verificó todos los vértices capturados: 904 de 226 caras en OpenGL y 3 120 de 780 caras en Vulkan.
+
+Esta prueba usa un buffer de diagnóstico y cubre modelos de bloque. Quedan la integración con el envío normal de chunks, los fluidos y la ejecución del GLSL de Complementary con sus matrices y recursos reales.
 
 ```powershell
 .\scripts\Test-PackagedClient.ps1 -Backend opengl -Probe terrain -ComplementaryPack $zip

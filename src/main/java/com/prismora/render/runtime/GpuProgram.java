@@ -10,19 +10,19 @@ import java.util.*;
 public final class GpuProgram implements AutoCloseable {
  private final CompiledRenderPipeline compiled;
  public GpuProgram(GpuDevice device,String name,String vertex,String fragment,List<GpuFormat> formats,Collection<String> samplers){
-  this(device,name,vertex,fragment,formats.stream().map(format->new ColorTargetState(Optional.empty(),format,ColorTargetState.WRITE_ALL)).toList(),samplers,Optional.empty(),null);
+  this(device,name,vertex,fragment,formats.stream().map(format->new ColorTargetState(Optional.empty(),format,ColorTargetState.WRITE_ALL)).toList(),samplers,Optional.empty(),null,PrimitiveTopology.TRIANGLES);
  }
- public static GpuProgram withTargets(GpuDevice device,String name,String vertex,String fragment,List<TargetFormat> formats,Collection<String> samplers){return new GpuProgram(device,name,vertex,fragment,formats.stream().map(TargetFormat::state).toList(),samplers,Optional.empty(),null);}
+ public static GpuProgram withTargets(GpuDevice device,String name,String vertex,String fragment,List<TargetFormat> formats,Collection<String> samplers){return new GpuProgram(device,name,vertex,fragment,formats.stream().map(TargetFormat::state).toList(),samplers,Optional.empty(),null,PrimitiveTopology.TRIANGLES);}
  public static GpuProgram withDepth(GpuDevice device,String name,String vertex,String fragment,List<TargetFormat> formats,Collection<String> samplers,DepthStencilState depth){
-  return new GpuProgram(device,name,vertex,fragment,formats.stream().map(TargetFormat::state).toList(),samplers,Optional.of(depth),null);
+  return new GpuProgram(device,name,vertex,fragment,formats.stream().map(TargetFormat::state).toList(),samplers,Optional.of(depth),null,PrimitiveTopology.TRIANGLES);
  }
- public static GpuProgram withVertices(GpuDevice device,String name,String vertex,String fragment,List<GpuFormat> formats,VertexFormat vertexFormat){
-  return new GpuProgram(device,name,vertex,fragment,formats.stream().map(format->new ColorTargetState(Optional.empty(),format,ColorTargetState.WRITE_ALL)).toList(),List.of(),Optional.empty(),vertexFormat);
+ public static GpuProgram withVertices(GpuDevice device,String name,String vertex,String fragment,List<GpuFormat> formats,VertexFormat vertexFormat,PrimitiveTopology topology){
+  return new GpuProgram(device,name,vertex,fragment,formats.stream().map(format->new ColorTargetState(Optional.empty(),format,ColorTargetState.WRITE_ALL)).toList(),List.of(),Optional.empty(),vertexFormat,topology);
  }
- private GpuProgram(GpuDevice device,String name,String vertex,String fragment,List<ColorTargetState> descriptions,Collection<String> samplers,Optional<DepthStencilState> depth,VertexFormat vertexFormat){
+ private GpuProgram(GpuDevice device,String name,String vertex,String fragment,List<ColorTargetState> descriptions,Collection<String> samplers,Optional<DepthStencilState> depth,VertexFormat vertexFormat,PrimitiveTopology topology){
   var states=List.copyOf(descriptions);
   if(states.isEmpty()||states.size()>Math.min(8,device.getDeviceInfo().limits().maxColorAttachments()))throw new IllegalArgumentException("Unsupported simultaneous color target count");
-  var id=Identifier.fromNamespaceAndPath("prismora","runtime/"+name);var builder=RenderPipeline.builder().withLocation(id).withVertexShader(id).withFragmentShader(id).withPrimitiveTopology(PrimitiveTopology.TRIANGLES).withCull(false).withDepthStencilState(depth);
+  var id=Identifier.fromNamespaceAndPath("prismora","runtime/"+name);var builder=RenderPipeline.builder().withLocation(id).withVertexShader(id).withFragmentShader(id).withPrimitiveTopology(topology).withCull(false).withDepthStencilState(depth);
   if(vertexFormat!=null)builder.withVertexBinding(0,vertexFormat);
   for(int i=0;i<states.size();i++)builder.withColorTargetState(i,states.get(i));
   var layout=BindGroupLayout.builder();for(String sampler:new TreeSet<>(samplers))layout.withUniform(sampler,UniformType.COMBINED_IMAGE_SAMPLER);if(!samplers.isEmpty())builder.withBindGroupLayout(layout.build());
