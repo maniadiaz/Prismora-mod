@@ -1,4 +1,4 @@
-param([ValidateSet('opengl','vulkan')][string]$Backend='opengl',[ValidateSet('regression','performance','legacy','mrt','terrain')][string]$Probe='regression',[string]$AdditionalModsDirectory='')
+param([ValidateSet('opengl','vulkan')][string]$Backend='opengl',[ValidateSet('regression','performance','legacy','mrt','terrain')][string]$Probe='regression',[string]$AdditionalModsDirectory='',[string]$ComplementaryPack='')
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $projectRoot
@@ -6,6 +6,11 @@ try {
     & .\gradlew.bat build --console=plain
     if($LASTEXITCODE -ne 0){throw 'Build failed'}
     $isolated=Join-Path $projectRoot '.gradle/packaged-smoke'
+    $packPath=''
+    if($ComplementaryPack){
+        if($Probe -ne 'terrain'){throw '-ComplementaryPack requires -Probe terrain'}
+        $packPath=(Resolve-Path -LiteralPath $ComplementaryPack).Path
+    }
     $additionalMods=@()
     if($AdditionalModsDirectory){
         $additionalMods=@(Get-ChildItem -LiteralPath $AdditionalModsDirectory -Filter '*.jar' -File | Where-Object Name -notlike 'prismora-*.jar' | Sort-Object Name)
@@ -34,6 +39,7 @@ minecraft {
             workingDir = layout.projectDirectory.dir('run')
             systemProperty 'prismora.renderSmoke', providers.gradleProperty('prismoraProbe').map { it == 'regression' }.getOrElse('true')
             systemProperty 'prismora.smokeFreshWorld', providers.gradleProperty('prismoraFreshWorld').getOrElse('false')
+            systemProperty 'prismora.terrainPack', providers.gradleProperty('prismoraTerrainPack').getOrElse('')
             systemProperty 'prismora.terrainSmoke', providers.gradleProperty('prismoraProbe').map { it == 'terrain' }.getOrElse('false')
             systemProperty 'prismora.mrtSmoke', providers.gradleProperty('prismoraProbe').map { it == 'mrt' }.getOrElse('false')
             systemProperty 'prismora.legacyRenderSmoke', providers.gradleProperty('prismoraProbe').map { it == 'legacy' }.getOrElse('false')
@@ -63,10 +69,11 @@ dependencies { implementation minecraft.dependency('net.minecraftforge:forge:26.
     [IO.File]::WriteAllText($options,$text,[Text.UTF8Encoding]::new($false))
     New-Item -ItemType Directory -Force (Join-Path $isolated 'run/config') | Out-Null
     [IO.File]::WriteAllText((Join-Path $isolated 'run/config/prismora.json'),'{"selected":"Prismora-Bloom","options":{"Prismora-Bloom":{"bloom_strength":0.15}}}',[Text.UTF8Encoding]::new($false))
-    & .\gradlew.bat -p $isolated runClient "-PprismoraProbe=$Probe" "-PprismoraFreshWorld=$([bool]$additionalMods.Count)" --console=plain
+    & .\gradlew.bat -p $isolated runClient "-PprismoraProbe=$Probe" "-PprismoraTerrainPack=$packPath" "-PprismoraFreshWorld=$([bool]$additionalMods.Count)" --console=plain
     if($LASTEXITCODE -ne 0){throw 'Packaged client failed'}
     $log=Get-Content -Raw -LiteralPath (Join-Path $isolated 'run/logs/latest.log')
     $markers=if($Probe -eq 'terrain'){@('PRISMORA_WORLD_TERRAIN_MRT_PASS')}elseif($Probe -eq 'mrt'){@('PRISMORA_MRT_HDR_SNORM_PINGPONG_PASS','PRISMORA_MRT_PERSISTENCE_CLEAR_PASS','PRISMORA_MRT_RESIZE_TRANSACTION_PASS','PRISMORA_MRT_FORMATS_PASS','PRISMORA_MRT_DEPTH_SNAPSHOTS_PASS','PRISMORA_MRT_SMOKE_PASS')}elseif($Probe -eq 'legacy'){@('PRISMORA_LEGACY_GPU_PASS','PRISMORA_LEGACY_DEPTH_PASS','PRISMORA_LEGACY_MATRICES_PASS','PRISMORA_LEGACY_OPTIONS_PASS','PRISMORA_LEGACY_SOURCE_ERROR_PASS','PRISMORA_LEGACY_NETHER_PASS','PRISMORA_LEGACY_DIMENSION_PASS','PRISMORA_LEGACY_RENDER_SMOKE_PASS')}elseif($Probe -eq 'performance'){@('PRISMORA_SCALED_TARGETS_PASS','PRISMORA_ENTRY_PROFILE_PASS','PRISMORA_PERFORMANCE_SMOKE_PASS','PRISMORA_ADAPTIVE_FALLBACK_PASS','PRISMORA_OPTION_WIDGETS_PASS','PRISMORA_PROFILE_BENCHMARK_PASS')}else{@('PRISMORA_GPU_PASS','PRISMORA_RENDER_SMOKE_PASS','PRISMORA_ERROR_RECOVERY_PASS','PRISMORA_BLOOM_PASS','PRISMORA_OPTIONS_PASS','PRISMORA_HOT_RELOAD_PASS','PRISMORA_RESTORE_PASS','PRISMORA_RESIZE_PASS')}
+    if($packPath){$markers=@($markers)+'PRISMORA_WORLD_TERRAIN_MATERIAL_PASS'}
     foreach($marker in $markers){
         if(-not $log.Contains($marker)){throw "Missing packaged validation marker: $marker"}
     }

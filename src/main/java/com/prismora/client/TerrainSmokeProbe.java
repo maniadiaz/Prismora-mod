@@ -1,31 +1,41 @@
 package com.prismora.client;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.renderpearl.api.GpuFormat;
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
+import com.mojang.renderpearl.api.GpuFormat;
 import com.mojang.renderpearl.api.pipeline.*;
 import com.mojang.renderpearl.api.textures.*;
+import com.prismora.compat.BlockMaterials;
+import com.prismora.compat.LegacyPack;
+import com.prismora.compat.ShaderPreprocessor;
+import com.prismora.pack.PackLoader;
 import com.prismora.Prismora;
 import com.prismora.render.runtime.GpuDepthTargets;
 import com.prismora.render.runtime.GpuTargets;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.TitleScreen;
-import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.ShaderManager;
-import net.minecraft.client.renderer.chunk.ChunkSectionLayerGroup;
-import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.GameType;
-import net.minecraft.world.level.LevelSettings;
-import net.minecraft.world.level.WorldDataConfiguration;
-import net.minecraft.world.level.levelgen.WorldOptions;
-import net.minecraft.world.level.levelgen.presets.WorldPresets;
-
+import com.prismora.render.runtime.TerrainQuadAttributes;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayerGroup;
+import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.ShaderManager;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
 
 /** Replays Minecraft's real opaque chunk draws into two independent color targets. */
 public final class TerrainSmokeProbe {
@@ -55,6 +65,10 @@ public final class TerrainSmokeProbe {
     private static boolean openingWorld, replaying, pending, finished;
     private static int ticks, worldTicks, readbacks;
     private static volatile int verifiedPixels;
+    private static volatile BlockMaterials materials;
+    private record MaterialSample(int id, TerrainQuadAttributes attributes) {}
+    private static final AtomicReference<MaterialSample> firstMaterial = new AtomicReference<>();
+    private static final String PACK_FILE = System.getProperty("prismora.terrainPack", "");
 
     private TerrainSmokeProbe() {}
 
@@ -78,9 +92,24 @@ public final class TerrainSmokeProbe {
             }
         }
         if (client.player != null && ++worldTicks == 1) {
+            if (!PACK_FILE.isEmpty()) {
+                materials = loadMaterials();
+                var leaves = Blocks.OAK_LEAVES.defaultBlockState();
+                int dry = materials.id(leaves.setValue(BlockStateProperties.WATERLOGGED, false));
+                int wet = materials.id(leaves.setValue(BlockStateProperties.WATERLOGGED, true));
+                if (dry != 10009 || wet != 10011) {
+                    throw new IllegalStateException("Complementary oak leaf IDs differ: dry=" + dry + ", wet=" + wet);
+                }
+                client.levelRenderer.invalidateCompiledGeometry(client.level, client.options, client.gameRenderer.mainCamera(), client.getBlockColors());
+            }
             client.player.setXRot(75);
         }
-        if (verifiedPixels > 0) {
+        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || firstMaterial.get() != null)) {
+            if (materials != null) {
+                Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MATERIAL_PASS: {} states mapped; real emitted quad ID {}; oak leaves 10009/10011; world quad {}",
+                        materials.size(), firstMaterial.get().id(), firstMaterial.get().attributes());
+                materials = null;
+            }
             finished = true;
             readback.close();
             depth.close();
@@ -89,6 +118,31 @@ public final class TerrainSmokeProbe {
             pipelines.clear();
             Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MRT_PASS: {} matching pixels from real chunk draws", verifiedPixels);
             client.stop();
+        }
+    }
+
+    public static int materialId(BlockState state) {
+        var table = materials;
+        return table == null || firstMaterial.get() != null ? -1 : table.id(state);
+    }
+
+    public static void recordMaterial(int id, BakedQuad quad) {
+        if (firstMaterial.get() == null) {
+            var attrs = TerrainQuadAttributes.from(quad);
+            float dot = attrs.nx() * attrs.tx() + attrs.ny() * attrs.ty() + attrs.nz() * attrs.tz();
+            if (!(Math.abs(dot) < 0.0001f && Float.isFinite(attrs.midU()) && Float.isFinite(attrs.midV()))) {
+                throw new IllegalStateException("Invalid terrain quad attributes: " + attrs);
+            }
+            firstMaterial.compareAndSet(null, new MaterialSample(id, attrs));
+        }
+    }
+
+    private static BlockMaterials loadMaterials() {
+        try {
+            var pack = new PackLoader().load(Path.of(PACK_FILE));
+            return BlockMaterials.load(LegacyPack.inspect(pack.id(), pack.files()), Map.of(), ShaderPreprocessor.environment());
+        } catch (IOException failure) {
+            throw new IllegalStateException("Could not load terrain materials from " + PACK_FILE, failure);
         }
     }
 
