@@ -79,7 +79,23 @@ final class TerrainVertexSmokeProbe {
 
     private TerrainVertexSmokeProbe() {}
 
-    static void submit(List<TerrainVertexData> faces, com.prismora.render.runtime.TerrainCameraFrame camera, net.minecraft.core.SectionPos section,
+    static GpuBuffer upload(List<TerrainVertexData> faces) {
+        var device = RenderSystem.getDevice();
+        int vertices = Math.multiplyExact(faces.size(), CORNERS);
+        ByteBuffer staging = MemoryUtil.memAlloc(vertices * TerrainVertexData.FORMAT.getVertexSize());
+
+        try {
+            for (int index = 0; index < vertices; index++) {
+                faces.get(index / CORNERS).writeVertex(staging, index % CORNERS);
+            }
+            return device.createBuffer(() -> "Prismora terrain attributes", GpuBuffer.USAGE_VERTEX, staging.flip());
+        } finally {
+            MemoryUtil.memFree(staging);
+        }
+
+    }
+
+    static void submit(GpuBuffer buffer, List<TerrainVertexData> faces, com.prismora.render.runtime.TerrainCameraFrame camera, net.minecraft.core.SectionPos section,
                        TerrainShadowFrame light, TerrainPackCompileProbe.Programs programs, Runnable completed) {
         var device = RenderSystem.getDevice();
         var remaining = new java.util.concurrent.atomic.AtomicInteger(4);
@@ -92,25 +108,13 @@ final class TerrainVertexSmokeProbe {
         int height = (vertices + WIDTH - 1) / WIDTH;
         int planeBytes = WIDTH * height * 4 * Float.BYTES;
         String vertex = VERTEX.replace("%WIDTH%", Integer.toString(WIDTH)).replace("%HEIGHT%", Integer.toString(height));
-        ByteBuffer staging = MemoryUtil.memAlloc(vertices * TerrainVertexData.FORMAT.getVertexSize());
-        GpuBuffer buffer;
-        try {
-            for (int index = 0; index < vertices; index++) {
-                faces.get(index / CORNERS).writeVertex(staging, index % CORNERS);
-            }
-            buffer = device.createBuffer(() -> "Prismora terrain attributes", GpuBuffer.USAGE_VERTEX, staging.flip());
-        } finally {
-            MemoryUtil.memFree(staging);
-        }
-
         var formats = Collections.nCopies(PLANES, GpuFormat.RGBA32_FLOAT);
         var descriptor = RenderPassDescriptor.builder(() -> "Prismora terrain attribute round trip");
         var textures = new GpuTexture[PLANES];
         var readback = device.createBuffer(() -> "Prismora terrain attribute readback",
                 GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, PLANES * planeBytes);
         var encoder = device.createCommandEncoder();
-        try (buffer;
-             var program = GpuProgram.withVertices(device, "terrain_vertex_probe", vertex, FRAGMENT, formats,
+        try (var program = GpuProgram.withVertices(device, "terrain_vertex_probe", vertex, FRAGMENT, formats,
                      TerrainVertexData.FORMAT, PrimitiveTopology.POINTS)) {
             var views = new com.mojang.renderpearl.api.textures.GpuTextureView[PLANES];
             try {

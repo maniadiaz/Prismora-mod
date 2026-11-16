@@ -107,13 +107,13 @@ final class ComplementaryShadowSmokeProbe {
              var uniforms = device.createBuffer(() -> "Complementary shadow uniforms", GpuBuffer.USAGE_UNIFORM, uniformData);
              var targets = new GpuTargets(device, Map.of(0, color, 1, color), SIZE, SIZE, 1024 * 1024);
              var depth = new GpuDepthTargets(device, SIZE, SIZE, 1024 * 1024);
-             var program = GpuProgram.withVertices(device, "complementary_shadow_draw", shader.vertex(), shader.fragment(),
-                     List.of(GpuFormat.RGBA8_UNORM, GpuFormat.RGBA8_UNORM), TerrainVertexData.FORMAT, PrimitiveTopology.QUADS,
-                     shader.samplers(), DepthStencilState.DEFAULT, List.of(TerrainShaderTranslator.UNIFORM_BLOCK));
              var check = witnessProgram();
              var output = device.createTexture("Complementary shadow validation", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC,
                      GpuFormat.RGBA8_UNORM, SIZE, SIZE, 1, 1);
              var outputView = device.createTextureView(output)) {
+            var program = ComplementaryPreviewPipelines.get("shadow", () -> GpuProgram.withVertices(device, "complementary_shadow_draw", shader.vertex(), shader.fragment(),
+                     List.of(GpuFormat.RGBA8_UNORM, GpuFormat.RGBA8_UNORM), TerrainVertexData.FORMAT, PrimitiveTopology.QUADS,
+                     shader.samplers(), DepthStencilState.DEFAULT, List.of(TerrainShaderTranslator.UNIFORM_BLOCK)));
             var known = Map.of("tex", atlas, "noisetex", noise.getTextureView(), "gaux4", cloud.getTextureView(),
                     "lightmap", client.gameRenderer.lightmap());
             var required = new TreeSet<>(((FrontendRenderPipeline) program.compiled()).uniformIndices().keySet());

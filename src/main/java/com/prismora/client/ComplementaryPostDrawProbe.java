@@ -91,7 +91,8 @@ final class ComplementaryPostDrawProbe {
                         throw new IllegalStateException("Missing texture for Complementary " + post.name() + ": " + missing);
                     }
 
-                    try (var program = ComplementaryPostCompileProbe.compile(post);
+                    var program = ComplementaryPreviewPipelines.get(post.name(), () -> ComplementaryPostCompileProbe.compile(post));
+                    try (
                          var uniforms = device.createBuffer(() -> "Complementary post scene", GpuBuffer.USAGE_UNIFORM,
                                  parameters(shader, camera, scene, light, section, width, height, frame))) {
                         var target = RenderPassDescriptor.builder(() -> "Complementary " + post.name());

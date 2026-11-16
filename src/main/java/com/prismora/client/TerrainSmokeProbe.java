@@ -74,6 +74,10 @@ public final class TerrainSmokeProbe {
     private static volatile int verifiedPixels;
     private static volatile BlockMaterials materials;
     private static boolean vertexSubmitted;
+    private static GpuBuffer previewMesh;
+    private static int requestedPose;
+    private static boolean poseRendering;
+    private static volatile boolean poseVerified;
     private static volatile TerrainCameraFrame cameraFrame;
     private static volatile boolean captureStarted;
     private static volatile boolean vertexVerified;
@@ -85,6 +89,7 @@ public final class TerrainSmokeProbe {
     private static final AtomicBoolean captureInProgress = new AtomicBoolean();
     private static final ThreadLocal<SectionMesh> building = new ThreadLocal<>();
     private static final SectionPos PRESENT_SECTION = SectionPos.of(-33, 4, 4);
+    private static final List<Integer> PREVIEW_YAW = List.of(0, 14, 28);
     private static final String PACK_FILE = System.getProperty("prismora.terrainPack", "");
 
     private TerrainSmokeProbe() {}
@@ -140,18 +145,28 @@ public final class TerrainSmokeProbe {
             var frame = cameraFrame;
             var sky = client.gameRenderer.gameRenderState().levelRenderState.skyRenderState;
             var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle);
-            TerrainVertexSmokeProbe.submit(sample.faces(), frame, sample.section(), light, packPrograms, () -> vertexVerified = true);
+            previewMesh = TerrainVertexSmokeProbe.upload(sample.faces());
+            TerrainVertexSmokeProbe.submit(previewMesh, sample.faces(), frame, sample.section(), light, packPrograms, () -> vertexVerified = true);
             TerrainUniformSmokeProbe.submit(packPrograms.terrain(), frame, sample.section(), () -> uniformsVerified = true);
             ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
         }
-        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified && shadowsVerified && ComplementaryPresentProbe.verified()))) {
+        if (vertexVerified && ComplementaryPresentProbe.verified()) {
+            advancePreview(client, sample);
+        }
+        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified && shadowsVerified && ComplementaryPresentProbe.verified() && ComplementaryPresentProbe.generation() == PREVIEW_YAW.size() && poseVerified))) {
             if (materials != null) {
                 Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MATERIAL_PASS: {} states mapped; section {} contains {} block-model faces; oak leaves 10009/10011",
                         materials.size(), sample.section(), sample.faces().size());
                 materials = null;
             }
+            if (!PACK_FILE.isEmpty()) {
+                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_LIVE_SEQUENCE_PASS: {} poses presented with {} reused real pipelines",
+                        PREVIEW_YAW.size(), ComplementaryPreviewPipelines.size());
+            }
             finished = true;
             ComplementaryPresentProbe.close();
+            ComplementaryPreviewPipelines.close();
+            if (previewMesh != null) previewMesh.close();
             readback.close();
             depth.close();
             colors.close();
@@ -160,6 +175,29 @@ public final class TerrainSmokeProbe {
             Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MRT_PASS: {} matching pixels from real chunk draws", verifiedPixels);
             client.stop();
         }
+    }
+
+    private static void advancePreview(Minecraft client, SectionMesh sample) {
+        int presented = ComplementaryPresentProbe.generation();
+        if (presented < PREVIEW_YAW.size() && requestedPose < presented && (presented == 1 || poseVerified)) {
+            requestedPose = presented;
+            poseRendering = false;
+            poseVerified = false;
+            client.player.connection.sendCommand("tp @s -526.5 76 70.5 " + PREVIEW_YAW.get(requestedPose) + " 75");
+            return;
+        }
+        if (requestedPose == 0 || poseRendering) {
+            return;
+        }
+        var state = client.gameRenderer.gameRenderState().levelRenderState;
+        if (Math.abs(state.cameraRenderState.yRot - PREVIEW_YAW.get(requestedPose)) > 0.05f) {
+            return;
+        }
+        poseRendering = true;
+        var sky = state.skyRenderState;
+        var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle);
+        ComplementaryShadowSmokeProbe.submit(packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
+                sample.section(), packPrograms.terrain(), packPrograms.post(), () -> poseVerified = true);
     }
 
     public static void captureCamera(Matrix4fc projection) {

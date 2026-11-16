@@ -32,6 +32,8 @@ public final class ComplementaryPresentProbe {
     private static boolean checked;
     private static volatile boolean matched;
     private static volatile boolean captured;
+    private static int generation;
+    private static int[] previousPixels;
 
     private ComplementaryPresentProbe() {}
 
@@ -39,16 +41,30 @@ public final class ComplementaryPresentProbe {
         return matched && captured;
     }
 
+    static int generation() {
+        return generation;
+    }
+
     static void stage(GpuTexture output) {
         var device = RenderSystem.getDevice();
         int width = output.getWidth(0), height = output.getHeight(0);
-        if (retained != null) {
-            throw new IllegalStateException("Complementary preview already staged");
+        if (retained != null && !verified()) {
+            throw new IllegalStateException("Previous Complementary preview has not completed");
         }
-        retained = device.createTexture("Complementary presented frame",
-                GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING, output.getFormat(), width, height, 1, 1);
+        if (retained != null && (retained.getWidth(0) != width || retained.getHeight(0) != height
+                || retained.getFormat() != output.getFormat())) {
+            throw new IllegalStateException("Complementary probe dimensions changed");
+        }
+        checked = false;
+        matched = false;
+        captured = false;
+        generation++;
         try {
-            preview = device.createTextureView(retained);
+            if (retained == null) {
+                retained = device.createTexture("Complementary presented frame",
+                        GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING, output.getFormat(), width, height, 1, 1);
+                preview = device.createTextureView(retained);
+            }
             var encoder = device.createCommandEncoder();
             encoder.copyTextureToTexture(output, retained, 0, 0, 0, 0, 0, width, height);
             encoder.submit();
@@ -125,9 +141,26 @@ public final class ComplementaryPresentProbe {
     }
 
     private static void capture(RenderTarget target) {
+        int frame = generation;
         Screenshot.takeScreenshot(target, image -> {
             try (image) {
-                var path = Minecraft.getInstance().gameDirectory.toPath().resolve("complementary-present.png");
+                var pixels = image.getPixels();
+                if (previousPixels != null) {
+                    if (previousPixels.length != pixels.length) {
+                        throw new IllegalStateException("Complementary capture dimensions changed");
+                    }
+                    int changed = 0;
+                    for (int i = 0; i < pixels.length; i++) {
+                        if (previousPixels[i] != pixels[i]) changed++;
+                    }
+                    if (changed < 128) {
+                        throw new IllegalStateException("New camera pose did not change the Complementary frame");
+                    }
+                    Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_LIVE_PASS: frame {} changed {} presented pixels", frame, changed);
+                }
+                previousPixels = pixels;
+                String name = frame == 1 ? "complementary-present.png" : "complementary-present-" + frame + ".png";
+                var path = Minecraft.getInstance().gameDirectory.toPath().resolve(name);
                 image.writeToFile(path);
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_PRESENT_CAPTURE: screenshot {}x{}", image.getWidth(), image.getHeight());
                 captured = true;
@@ -138,6 +171,7 @@ public final class ComplementaryPresentProbe {
     }
 
     static void close() {
+        previousPixels = null;
         if (blit != null) {
             blit.close();
             blit = null;

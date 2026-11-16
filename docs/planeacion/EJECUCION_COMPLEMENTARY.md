@@ -95,7 +95,9 @@ En OpenGL, composite1 requería más de las 12 entradas disponibles en la caché
 
 El ensayo presenta `final` en el framebuffer principal de Minecraft al terminar el mundo y comprueba que coincide con la textura de salida en 49 puntos. Las capturas de 960 × 540 se tomaron sin la pantalla de carga. Ambas ejecuciones usaron la semilla 1234, la sección (-33, 4, 4), la posición de jugador (-526.5, 76.0, 70.5), la misma rotación y la hora fija 6000. La reconstrucción capturó 780 caras en OpenGL y 776 en Vulkan. Las capturas coincidieron exactamente en el 99.61 % de los píxeles y el error absoluto medio por canal fue de 0.0037 sobre 255. Los PNG quedan en `.gradle/packaged-smoke-terrain-<backend>/run/complementary-present.png`.
 
-El ensayo presenta una imagen ya calculada de una sección. Quedan el renderizado continuo del mundo completo, los mipmaps, las transparencias, el cielo y la activación del pack desde el menú.
+El ensayo siguiente presentó tres orientaciones sucesivas de cámara (0, 14 y 28 grados) en una misma sección. Cada giro vuelve a ejecutar el `shadow`, el terreno y los nueve pases posteriores reales, reutilizando el buffer de la malla y los 11 programas compilados. La lectura verificó 355 612 y 304 696 píxeles distintos entre capturas consecutivas en OpenGL, y 355 565 y 304 692 en Vulkan. Las capturas se guardan como `complementary-present.png`, `complementary-present-2.png` y `complementary-present-3.png`.
+
+El ensayo ejecuta una secuencia de tres poses y recrea los adjuntos y el historial al cambiar de pose. Quedan el renderizado continuo, la incorporación de las demás secciones visibles, los mipmaps, las transparencias, el cielo y la activación desde el menú.
 
 ## Hallazgo para E10
 

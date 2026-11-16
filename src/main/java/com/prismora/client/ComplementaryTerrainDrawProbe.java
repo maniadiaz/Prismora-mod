@@ -42,13 +42,13 @@ final class ComplementaryTerrainDrawProbe {
                      GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_TEXTURE_BINDING,
                      GpuFormat.RGBA8_UNORM, 1, 1, 1, 1);
              var specularView = device.createTextureView(specular);
-             var program = GpuProgram.withVertices(device, "complementary_gbuffers_terrain_draw", shader.vertex(), shader.fragment(),
-                     List.of(color.format(), material.format(), normal.format()), TerrainVertexData.FORMAT, PrimitiveTopology.QUADS,
-                     shader.samplers(), DepthStencilState.DEFAULT, List.of(TerrainShaderTranslator.UNIFORM_BLOCK));
              var witness = witnessProgram();
              var output = device.createTexture("Complementary terrain validation", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC,
                      GpuFormat.RGBA8_UNORM, SIZE, SIZE, 1, 1);
              var outputView = device.createTextureView(output)) {
+            var program = ComplementaryPreviewPipelines.get("terrain", () -> GpuProgram.withVertices(device, "complementary_gbuffers_terrain_draw", shader.vertex(), shader.fragment(),
+                     List.of(color.format(), material.format(), normal.format()), TerrainVertexData.FORMAT, PrimitiveTopology.QUADS,
+                     shader.samplers(), DepthStencilState.DEFAULT, List.of(TerrainShaderTranslator.UNIFORM_BLOCK)));
             var known = Map.of("tex", atlas, "noisetex", noise, "specular", specularView,
                     "shadowtex0", shadowDepth, "shadowtex1", shadowOpaqueDepth, "shadowcolor0", shadowColor);
             var required = new TreeSet<>(((FrontendRenderPipeline) program.compiled()).uniformIndices().keySet());
