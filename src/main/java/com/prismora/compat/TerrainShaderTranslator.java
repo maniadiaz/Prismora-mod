@@ -86,9 +86,11 @@ public final class TerrainShaderTranslator {
                                 Map<String, Varying> varyings) throws IOException {
         String masked = LegacyTranslator.mask(source);
         var edits = new ArrayList<Edit>();
+        String body = UNIFORM.matcher(masked).replaceAll(" ");
         var uniform = UNIFORM.matcher(masked);
         while (uniform.find()) {
             String type = uniform.group(1);
+            var usedSamplers = new ArrayList<String>();
             for (String declaration : uniform.group(2).split(",")) {
                 String[] parts = declaration.split("=", 2);
                 String name = parts[0].strip();
@@ -96,7 +98,10 @@ public final class TerrainShaderTranslator {
                     throw new IOException("Unsupported terrain uniform declaration: " + declaration);
                 }
                 if (type.startsWith("sampler")) {
-                    samplers.add(name);
+                    if (Pattern.compile("\\b" + Pattern.quote(name) + "\\b").matcher(body).find()) {
+                        samplers.add(name);
+                        usedSamplers.add(name);
+                    }
                 } else {
                     if (parts.length == 2) defaults.put(name, parts[1].strip());
                     String previous = uniforms.putIfAbsent(name, type);
@@ -105,10 +110,11 @@ public final class TerrainShaderTranslator {
                     }
                 }
             }
-            if (type.equals("sampler2DShadow")) {
-                edits.add(new Edit(uniform.start(1), uniform.end(1), "sampler2D"));
-            } else if (!type.startsWith("sampler")) {
+            if (!type.startsWith("sampler") || usedSamplers.isEmpty()) {
                 edits.add(blank(source, uniform));
+            } else {
+                String effectiveType = type.equals("sampler2DShadow") ? "sampler2D" : type;
+                edits.add(new Edit(uniform.start(), uniform.end(), "uniform " + effectiveType + " " + String.join(", ", usedSamplers) + ";"));
             }
         }
         var attribute = ATTRIBUTE.matcher(masked);

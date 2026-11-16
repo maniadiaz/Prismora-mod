@@ -19,7 +19,9 @@ import java.util.Map;
 final class TerrainPackCompileProbe {
     private TerrainPackCompileProbe() {}
 
-    static TerrainShaderTranslator.Program verify(LegacyPack pack) throws IOException {
+    record Programs(TerrainShaderTranslator.Program terrain, ComplementaryShadowSmokeProbe.Inputs shadow) {}
+
+    static Programs verify(LegacyPack pack) throws IOException {
         var options = Map.<String, String>of();
         var environment = ShaderPreprocessor.environment();
         var dimension = "minecraft:overworld";
@@ -39,17 +41,17 @@ final class TerrainPackCompileProbe {
                 List.of(TerrainShaderTranslator.UNIFORM_BLOCK))) {
             Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TERRAIN_COMPILE_PASS: {} / {}, outputs {}, {} uniforms and {} samplers",
                     terrain.vertex(), terrain.fragment(), slots, translated.uniformTypes().size(), translated.samplers().size());
-            verifyShadow(pack, options, environment, dimension);
-            return translated;
+            return new Programs(translated, verifyShadow(pack, options, environment, dimension));
         } catch (RuntimeException error) {
             Prismora.LOGGER.error("Terrain compiler source map: {}", translated.sourceFiles());
             throw error;
         }
     }
 
-    private static void verifyShadow(LegacyPack pack, Map<String, String> options, Map<String, String> environment,
+    private static ComplementaryShadowSmokeProbe.Inputs verifyShadow(LegacyPack pack, Map<String, String> options, Map<String, String> environment,
                                      String dimension) throws IOException {
-        var shadow = new PackContract(pack, options, environment, dimension).resolve("shadow").orElseThrow();
+        var contract = new PackContract(pack, options, environment, dimension);
+        var shadow = contract.resolve("shadow").orElseThrow();
         var vertex = new ShaderPreprocessor(pack, options, environment).process(shadow.vertex());
         var fragment = new ShaderPreprocessor(pack, options, environment).process(shadow.fragment());
         var device = RenderSystem.getDevice();
@@ -63,9 +65,20 @@ final class TerrainPackCompileProbe {
                 PrimitiveTopology.QUADS, translated.samplers(), DepthStencilState.DEFAULT, List.of(TerrainShaderTranslator.UNIFORM_BLOCK))) {
             Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SHADOW_COMPILE_PASS: {} / {}, outputs {}",
                     shadow.vertex(), shadow.fragment(), outputs);
+            return new ComplementaryShadowSmokeProbe.Inputs(translated, texture(pack, contract, "texture.noise"),
+                    texture(pack, contract, "texture.gbuffers.gaux4"));
         } catch (RuntimeException error) {
             Prismora.LOGGER.error("Shadow compiler source map: {}", translated.sourceFiles());
             throw error;
         }
+    }
+
+    private static byte[] texture(LegacyPack pack, PackContract contract, String key) throws IOException {
+        var reference = contract.properties().get(key);
+        if (reference == null) throw new IOException("Missing Complementary texture property " + key);
+        var path = ShaderPreprocessor.resolve("shaders/shaders.properties", reference);
+        var image = pack.files().get(path);
+        if (image == null) throw new IOException("Missing Complementary texture " + path);
+        return image;
     }
 }

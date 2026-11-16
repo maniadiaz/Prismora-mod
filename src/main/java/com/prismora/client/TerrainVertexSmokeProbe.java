@@ -79,9 +79,10 @@ final class TerrainVertexSmokeProbe {
 
     private TerrainVertexSmokeProbe() {}
 
-    static void submit(List<TerrainVertexData> faces, org.joml.Matrix4fc clipFromSection, TerrainShadowFrame light, Runnable completed) {
+    static void submit(List<TerrainVertexData> faces, com.prismora.render.runtime.TerrainCameraFrame camera, net.minecraft.core.SectionPos section,
+                       TerrainShadowFrame light, ComplementaryShadowSmokeProbe.Inputs shadow, Runnable completed) {
         var device = RenderSystem.getDevice();
-        var remaining = new java.util.concurrent.atomic.AtomicInteger(3);
+        var remaining = new java.util.concurrent.atomic.AtomicInteger(4);
         Runnable resultReady = () -> {
             if (remaining.decrementAndGet() == 0) {
                 completed.run();
@@ -136,8 +137,9 @@ final class TerrainVertexSmokeProbe {
                     } : () -> {}, 0);
                 }
                 encoder.submit();
-                TerrainIndexedSmokeProbe.submit(buffer, faces.size(), clipFromSection, resultReady);
+                TerrainIndexedSmokeProbe.submit(buffer, faces.size(), camera.clipFromSection(section), resultReady);
                 TerrainIndexedSmokeProbe.submitShadow(buffer, faces.size(), light, resultReady);
+                ComplementaryShadowSmokeProbe.submit(shadow, buffer, faces.size(), light, camera, section, resultReady);
             } finally {
                 for (int i = 0; i < PLANES; i++) {
                     if (views[i] != null) views[i].close();

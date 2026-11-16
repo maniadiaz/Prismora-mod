@@ -79,7 +79,7 @@ public final class TerrainSmokeProbe {
     private static volatile boolean vertexVerified;
     private static volatile boolean uniformsVerified;
     private static volatile boolean shadowsVerified;
-    private static com.prismora.compat.TerrainShaderTranslator.Program terrainProgram;
+    private static TerrainPackCompileProbe.Programs packPrograms;
     private record SectionMesh(SectionPos section, List<TerrainVertexData> faces) {}
     private static final AtomicReference<SectionMesh> captured = new AtomicReference<>();
     private static final AtomicBoolean captureInProgress = new AtomicBoolean();
@@ -127,8 +127,8 @@ public final class TerrainSmokeProbe {
             var frame = cameraFrame;
             var sky = client.gameRenderer.gameRenderState().levelRenderState.skyRenderState;
             var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle);
-            TerrainVertexSmokeProbe.submit(sample.faces(), frame.clipFromSection(sample.section()), light, () -> vertexVerified = true);
-            TerrainUniformSmokeProbe.submit(terrainProgram, frame, sample.section(), () -> uniformsVerified = true);
+            TerrainVertexSmokeProbe.submit(sample.faces(), frame, sample.section(), light, packPrograms.shadow(), () -> vertexVerified = true);
+            TerrainUniformSmokeProbe.submit(packPrograms.terrain(), frame, sample.section(), () -> uniformsVerified = true);
             ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
         }
         if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified && shadowsVerified))) {
@@ -229,7 +229,7 @@ public final class TerrainSmokeProbe {
         try {
             var pack = new PackLoader().load(Path.of(PACK_FILE));
             var legacy = LegacyPack.inspect(pack.id(), pack.files());
-            terrainProgram = TerrainPackCompileProbe.verify(legacy);
+            packPrograms = TerrainPackCompileProbe.verify(legacy);
             return BlockMaterials.load(legacy, Map.of(), ShaderPreprocessor.environment());
         } catch (IOException failure) {
             throw new IllegalStateException("Could not load terrain materials from " + PACK_FILE, failure);

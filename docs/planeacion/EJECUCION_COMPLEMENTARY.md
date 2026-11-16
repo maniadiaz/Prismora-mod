@@ -81,7 +81,7 @@ El JAR tradujo y enlazó los archivos `world0/shadow.vsh` y `world0/shadow.fsh` 
 
 Un ensayo posterior calcula una vista ortográfica local con los ángulos de sol y luna del cielo de Minecraft. Dibuja las caras indexadas de una sección con el atlas y escribe profundidad desde la luz. Al volver a muestrear el mapa, se verificaron 2 207 texeles de OpenGL y 1 527 de Vulkan con luz solar. Las pruebas automatizadas cubren la selección del sol y la luna y el orden de profundidad en las dos convenciones de clip.
 
-El mapa de una sección se genera con GLSL de diagnóstico. Falta ejecutar el shader real del pack, cubrir los objetos fuera de la cámara y conectar los mapas resultantes a gbuffers_terrain.
+El programa `shadow` real del ZIP también se ejecutó sobre una sección de Minecraft. El traductor retira las declaraciones de samplers que el código preprocesado no referencia, y el pase enlaza el atlas del juego y el ruido del ZIP. La lectura confirmó escrituras en profundidad, `shadowcolor0` y `shadowcolor1` en 312 texeles de OpenGL y 5 144 de Vulkan. Son secciones distintas dibujadas en un volumen local. Los mapas todavía se consumen por el verificador de lectura; falta enlazarlos a `gbuffers_terrain` y ampliar la geometría a los objetos fuera de cámara.
 
 ## Hallazgo para E10
 

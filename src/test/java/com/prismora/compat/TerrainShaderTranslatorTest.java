@@ -22,8 +22,9 @@ class TerrainShaderTranslatorTest {
                 /* RENDERTARGETS: 0,6,4 */
                 flat in vec3 tangent, binormal;
                 uniform sampler2D atlas;
+                uniform sampler2D unusedAtlas;
                 uniform float cloudHeight = 192.0;
-                void main() { gl_FragData[2] = vec4(tangent + binormal, 1.0); }
+                void main() { gl_FragData[2] = vec4(tangent + binormal, 1.0) * texture(atlas, vec2(0)); }
                 """);
         var translated = new TerrainShaderTranslator().translate(vertex, fragment, true);
         assertTrue(translated.vertex().contains("layout(location=0) flat out vec3 binormal;"));

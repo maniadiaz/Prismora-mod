@@ -25,13 +25,18 @@ public final class TerrainShadowFrame {
     }
 
     public Matrix4f clipFromSection(boolean zeroToOne) {
+        return new Matrix4f().setOrtho(-16, 16, -16, 16, 54, 10, zeroToOne).mul(viewFromSection());
+    }
+
+    public Matrix4f legacyProjection() {
+        return new Matrix4f().setOrtho(-16, 16, -16, 16, 10, 54, false);
+    }
+
+    public Matrix4f viewFromSection() {
         var center = new Vector3f(8);
         var eye = new Vector3f(towardLight).mul(32f).add(center);
         var up = Math.abs(towardLight.y) > 0.95f ? new Vector3f(0, 0, 1) : new Vector3f(0, 1, 0);
-        var view = new Matrix4f().setLookAt(eye, center, up);
-        // A section's center-to-corner distance is about 13.86 blocks.
-        var projection = new Matrix4f().setOrtho(-16, 16, -16, 16, 54, 10, zeroToOne);
-        return projection.mul(view);
+        return new Matrix4f().setLookAt(eye, center, up);
     }
 
     private static Vector3f celestialDirection(float angle) {
