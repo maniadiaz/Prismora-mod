@@ -71,6 +71,8 @@ El ensayo de terreno aún usa GLSL de diagnóstico. Quedan el envío normal de t
 
 El buffer de terreno y el compilador de `gbuffers_terrain` ya comparten el mismo formato de vértices. El buffer conserva el color por esquina y las dos coordenadas de luz con la emisión aplicada por Minecraft. Se verificaron por lectura GPU los ocho atributos del formato, incluidos RGBA y UV2, en 3 104 vértices de OpenGL y 3 120 de Vulkan. El GLSL del pack enlaza con ese formato. Queda completar las matrices, uniforms y texturas reales del programa antes de dibujar con él.
 
+La declaración GLSL y los offsets Java se generan a partir del mismo layout std140. Un pase con esa declaración verificó por lectura GPU la posición de cámara, las matrices de vista, proyección, normales e inversas, y las matrices de coordenadas de texturas. La prueba convierte la proyección legacy de vuelta a la profundidad nativa y compara el resultado con la proyección que Minecraft usó para la sección. Pasó en OpenGL y Vulkan. El shader real de Complementary también volvió a compilar; quedan sus uniforms de escena restantes, samplers y la llamada de dibujo.
+
 ## Hallazgo para E10
 
 Las fuentes de la plataforma fijada exponen únicamente VERTEX y FRAGMENT en `com/mojang/renderpearl/api/pipeline/ShaderType.java`. `GpuDevice`/`CommandEncoder` no exponen dispatch de compute; `UniformType` ofrece sampler, uniform buffer y texel buffer, sin contrato SSBO/storage-image. Por tanto, compute/imágenes/SSBO requieren ampliar el puente, no activar flags falsos. Este hallazgo no se marca como una implementación de E10 ni impide continuar el camino gráfico base.

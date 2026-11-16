@@ -19,7 +19,7 @@ import java.util.Map;
 final class TerrainPackCompileProbe {
     private TerrainPackCompileProbe() {}
 
-    static void verify(LegacyPack pack) throws IOException {
+    static TerrainShaderTranslator.Program verify(LegacyPack pack) throws IOException {
         var options = Map.<String, String>of();
         var environment = ShaderPreprocessor.environment();
         var dimension = "minecraft:overworld";
@@ -39,6 +39,7 @@ final class TerrainPackCompileProbe {
                 List.of(TerrainShaderTranslator.UNIFORM_BLOCK))) {
             Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TERRAIN_COMPILE_PASS: {} / {}, outputs {}, {} uniforms and {} samplers",
                     terrain.vertex(), terrain.fragment(), slots, translated.uniformTypes().size(), translated.samplers().size());
+            return translated;
         } catch (RuntimeException error) {
             Prismora.LOGGER.error("Terrain compiler source map: {}", translated.sourceFiles());
             throw error;

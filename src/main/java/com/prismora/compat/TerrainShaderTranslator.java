@@ -1,5 +1,6 @@
 package com.prismora.compat;
 
+import com.prismora.render.runtime.TerrainUniformLayout;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,6 +45,7 @@ public final class TerrainShaderTranslator {
     public Program translate(ShaderPreprocessor.Result vertex, ShaderPreprocessor.Result fragment, boolean zeroToOne)
             throws IOException {
         var uniforms = new LinkedHashMap<String, String>();
+        uniforms.put("prismoraTextureMatrix", "mat4[2]");
         uniforms.put("prismoraProjection", "mat4");
         uniforms.put("prismoraModelView", "mat4");
         uniforms.put("prismoraNormalMatrix", "mat3");
@@ -53,10 +55,7 @@ public final class TerrainShaderTranslator {
         var slots = DrawBuffers.parse(fragment);
         var vs = stage(vertex.source(), true, uniforms, defaults, samplers, varyings);
         var fs = stage(fragment.source(), false, uniforms, defaults, samplers, varyings);
-        var block = new StringBuilder("layout(std140) uniform ").append(UNIFORM_BLOCK).append(" {\n")
-                .append("mat4 prismoraTextureMatrix[2];\n");
-        uniforms.forEach((name, type) -> block.append(type).append(' ').append(name).append(";\n"));
-        block.append("};\n");
+        String block = new TerrainUniformLayout(uniforms).declaration(UNIFORM_BLOCK);
 
         String vertexInputs = """
                 layout(location=0) in vec3 Position;

@@ -77,6 +77,8 @@ public final class TerrainSmokeProbe {
     private static volatile TerrainCameraFrame cameraFrame;
     private static volatile boolean captureStarted;
     private static volatile boolean vertexVerified;
+    private static volatile boolean uniformsVerified;
+    private static com.prismora.compat.TerrainShaderTranslator.Program terrainProgram;
     private record SectionMesh(SectionPos section, List<TerrainVertexData> faces) {}
     private static final AtomicReference<SectionMesh> captured = new AtomicReference<>();
     private static final AtomicBoolean captureInProgress = new AtomicBoolean();
@@ -121,9 +123,11 @@ public final class TerrainSmokeProbe {
         var sample = captured.get();
         if (worldTicks > 40 && sample != null && cameraFrame != null && !vertexSubmitted) {
             vertexSubmitted = true;
-            TerrainVertexSmokeProbe.submit(sample.faces(), cameraFrame.clipFromSection(sample.section()), () -> vertexVerified = true);
+            var frame = cameraFrame;
+            TerrainVertexSmokeProbe.submit(sample.faces(), frame.clipFromSection(sample.section()), () -> vertexVerified = true);
+            TerrainUniformSmokeProbe.submit(terrainProgram, frame, sample.section(), () -> uniformsVerified = true);
         }
-        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || vertexVerified)) {
+        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified))) {
             if (materials != null) {
                 Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MATERIAL_PASS: {} states mapped; section {} contains {} block-model faces; oak leaves 10009/10011",
                         materials.size(), sample.section(), sample.faces().size());
@@ -221,7 +225,7 @@ public final class TerrainSmokeProbe {
         try {
             var pack = new PackLoader().load(Path.of(PACK_FILE));
             var legacy = LegacyPack.inspect(pack.id(), pack.files());
-            TerrainPackCompileProbe.verify(legacy);
+            terrainProgram = TerrainPackCompileProbe.verify(legacy);
             return BlockMaterials.load(legacy, Map.of(), ShaderPreprocessor.environment());
         } catch (IOException failure) {
             throw new IllegalStateException("Could not load terrain materials from " + PACK_FILE, failure);
