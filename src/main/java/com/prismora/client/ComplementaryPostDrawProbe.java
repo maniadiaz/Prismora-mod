@@ -124,6 +124,7 @@ final class ComplementaryPostDrawProbe {
                     throw new IllegalStateException("Complementary composite6 did not receive the previous frame's colortex2");
                 }
 
+                if (frame == 1) ComplementaryPresentProbe.stage(output);
                 var encoder = device.createCommandEncoder();
                 encoder.copyTextureToBuffer(output, readback, (long) frame * frameBytes, frame == 0 ? () -> {} : () -> {
                     try (readback; var mapping = readback.map(true, false)) {

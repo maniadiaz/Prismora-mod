@@ -93,6 +93,10 @@ La prueba completa de posprocesado ejecutó los nueve programas en orden durante
 
 En OpenGL, composite1 requería más de las 12 entradas disponibles en la caché de estado de RenderPearl. El ajuste amplía la caché de software a 32 y conserva los límites del dispositivo. La prueba usa un solo nivel por textura, dos iteraciones de la misma malla y la misma profundidad para los dos samplers de profundidad de la escena opaca. Falta integrar el mundo completo y presentar el resultado en juego.
 
+El ensayo presenta `final` en el framebuffer principal de Minecraft al terminar el mundo y comprueba que coincide con la textura de salida en 49 puntos. Las capturas de 960 × 540 se tomaron sin la pantalla de carga. Ambas ejecuciones usaron la semilla 1234, la sección (-33, 4, 4), la posición de jugador (-526.5, 76.0, 70.5), la misma rotación y la hora fija 6000. La reconstrucción capturó 780 caras en OpenGL y 776 en Vulkan. Las capturas coincidieron exactamente en el 99.61 % de los píxeles y el error absoluto medio por canal fue de 0.0037 sobre 255. Los PNG quedan en `.gradle/packaged-smoke-terrain-<backend>/run/complementary-present.png`.
+
+El ensayo presenta una imagen ya calculada de una sección. Quedan el renderizado continuo del mundo completo, los mipmaps, las transparencias, el cielo y la activación del pack desde el menú.
+
 ## Hallazgo para E10
 
 Las fuentes de la plataforma fijada exponen únicamente VERTEX y FRAGMENT en `com/mojang/renderpearl/api/pipeline/ShaderType.java`. `GpuDevice`/`CommandEncoder` no exponen dispatch de compute; `UniformType` ofrece sampler, uniform buffer y texel buffer, sin contrato SSBO/storage-image. Por tanto, compute/imágenes/SSBO requieren ampliar el puente, no activar flags falsos. Este hallazgo no se marca como una implementación de E10 ni impide continuar el camino gráfico base.

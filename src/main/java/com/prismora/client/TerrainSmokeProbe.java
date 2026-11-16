@@ -84,6 +84,7 @@ public final class TerrainSmokeProbe {
     private static final AtomicReference<SectionMesh> captured = new AtomicReference<>();
     private static final AtomicBoolean captureInProgress = new AtomicBoolean();
     private static final ThreadLocal<SectionMesh> building = new ThreadLocal<>();
+    private static final SectionPos PRESENT_SECTION = SectionPos.of(-33, 4, 4);
     private static final String PACK_FILE = System.getProperty("prismora.terrainPack", "");
 
     private TerrainSmokeProbe() {}
@@ -117,6 +118,18 @@ public final class TerrainSmokeProbe {
                 if (dry != 10009 || wet != 10011) {
                     throw new IllegalStateException("Complementary oak leaf IDs differ: dry=" + dry + ", wet=" + wet);
                 }
+                client.getWindow().setWindowed(960, 540);
+                client.player.connection.sendCommand("gamemode spectator");
+                client.player.connection.sendCommand("tp @s -526.5 76 70.5 0 75");
+                client.player.connection.sendCommand("time set 6000");
+                client.player.connection.sendCommand("gamerule minecraft:advance_time false");
+                client.player.connection.sendCommand("weather clear");
+
+            }
+        }
+        if (materials != null && !captureStarted && worldTicks >= 25 && cameraFrame != null) {
+            var position = cameraFrame.position();
+            if (Math.abs(position.x + 526.5) < 0.1 && Math.abs(position.z - 70.5) < 0.1) {
                 captureStarted = true;
                 client.levelRenderer.invalidateCompiledGeometry(client.level, client.options, client.gameRenderer.mainCamera(), client.getBlockColors());
             }
@@ -131,13 +144,14 @@ public final class TerrainSmokeProbe {
             TerrainUniformSmokeProbe.submit(packPrograms.terrain(), frame, sample.section(), () -> uniformsVerified = true);
             ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
         }
-        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified && shadowsVerified))) {
+        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified && shadowsVerified && ComplementaryPresentProbe.verified()))) {
             if (materials != null) {
                 Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MATERIAL_PASS: {} states mapped; section {} contains {} block-model faces; oak leaves 10009/10011",
                         materials.size(), sample.section(), sample.faces().size());
                 materials = null;
             }
             finished = true;
+            ComplementaryPresentProbe.close();
             readback.close();
             depth.close();
             colors.close();
@@ -157,7 +171,7 @@ public final class TerrainSmokeProbe {
 
     public static void beginSection(SectionPos section) {
         var frame = cameraFrame;
-        if (captureStarted && materials != null && captured.get() == null && frame != null
+        if (captureStarted && materials != null && section.equals(PRESENT_SECTION) && captured.get() == null && frame != null
                 && new org.joml.FrustumIntersection(frame.clipFromSection(section)).testAab(0, 0, 0, 16, 16, 16)
                 && captureInProgress.compareAndSet(false, true)) {
             if (captured.get() == null) {
