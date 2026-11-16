@@ -39,9 +39,32 @@ final class TerrainPackCompileProbe {
                 List.of(TerrainShaderTranslator.UNIFORM_BLOCK))) {
             Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TERRAIN_COMPILE_PASS: {} / {}, outputs {}, {} uniforms and {} samplers",
                     terrain.vertex(), terrain.fragment(), slots, translated.uniformTypes().size(), translated.samplers().size());
+            verifyShadow(pack, options, environment, dimension);
             return translated;
         } catch (RuntimeException error) {
             Prismora.LOGGER.error("Terrain compiler source map: {}", translated.sourceFiles());
+            throw error;
+        }
+    }
+
+    private static void verifyShadow(LegacyPack pack, Map<String, String> options, Map<String, String> environment,
+                                     String dimension) throws IOException {
+        var shadow = new PackContract(pack, options, environment, dimension).resolve("shadow").orElseThrow();
+        var vertex = new ShaderPreprocessor(pack, options, environment).process(shadow.vertex());
+        var fragment = new ShaderPreprocessor(pack, options, environment).process(shadow.fragment());
+        var device = RenderSystem.getDevice();
+        var translated = new TerrainShaderTranslator().translate(vertex, fragment, device.getDeviceInfo().isZZeroToOne());
+        var outputs = translated.outputSlots().stream().mapToInt(java.util.OptionalInt::orElseThrow).boxed().toList();
+        if (!outputs.equals(List.of(0)) && !outputs.equals(List.of(0, 1))) {
+            throw new IOException("Unexpected Complementary shadow targets: " + outputs);
+        }
+        try (var program = GpuProgram.withVertices(device, "complementary_shadow_compile", translated.vertex(), translated.fragment(),
+                java.util.Collections.nCopies(outputs.size(), GpuFormat.RGBA8_UNORM), TerrainVertexData.FORMAT,
+                PrimitiveTopology.QUADS, translated.samplers(), DepthStencilState.DEFAULT, List.of(TerrainShaderTranslator.UNIFORM_BLOCK))) {
+            Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SHADOW_COMPILE_PASS: {} / {}, outputs {}",
+                    shadow.vertex(), shadow.fragment(), outputs);
+        } catch (RuntimeException error) {
+            Prismora.LOGGER.error("Shadow compiler source map: {}", translated.sourceFiles());
             throw error;
         }
     }

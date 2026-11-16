@@ -1,6 +1,7 @@
 package com.prismora.compat;
 
 import com.prismora.render.runtime.TerrainUniformLayout;
+import com.prismora.render.runtime.ShadowDepthSampling;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,6 +23,8 @@ public final class TerrainShaderTranslator {
     private static final Pattern ATTRIBUTE = Pattern.compile("(?m)^[ \\t]*attribute\\s+(\\w+)\\s+(\\w+)\\s*;");
     private static final Map<String, String> BUILTINS = Map.ofEntries(
             Map.entry("gl_Vertex", "vec4(Position,1.0)"),
+            Map.entry("gl_VertexID", "gl_VertexIndex"),
+            Map.entry("ftransform", "prismoraTransform"),
             Map.entry("gl_Color", "Color"),
             Map.entry("gl_Normal", "Normal"),
             Map.entry("gl_MultiTexCoord0", "vec4(UV0,0.0,1.0)"),
@@ -66,12 +69,13 @@ public final class TerrainShaderTranslator {
                 layout(location=5) in vec4 mc_midTexCoord;
                 layout(location=6) in vec4 Color;
                 layout(location=7) in ivec2 UV2;
+                vec4 prismoraTransform(){return prismoraProjection*prismoraModelView*vec4(Position,1.0);}
                 #define main prismoraLegacyTerrainMain
                 """;
         String vertexEnd = "\n#undef main\nvoid main(){prismoraLegacyTerrainMain(); gl_Position.z = "
                 + (zeroToOne ? "(gl_Position.w-gl_Position.z)*0.5" : "-gl_Position.z") + ";}\n";
         String fragmentInputs = "layout(location=0) out vec4 prismoraFragData[" + slots.size() + "];\n"
-                + "vec4 prismoraShadow2D(sampler2DShadow s,vec3 p){return vec4(vec3(texture(s,p)),1.0);}\n";
+                + ShadowDepthSampling.GLSL;
         var files = new LinkedHashMap<>(vertex.sourceFiles());
         files.putAll(fragment.sourceFiles());
         return new Program(HEADER + block + vertexInputs + vs + vertexEnd, HEADER + block + fragmentInputs + fs,
@@ -101,7 +105,9 @@ public final class TerrainShaderTranslator {
                     }
                 }
             }
-            if (!type.startsWith("sampler")) {
+            if (type.equals("sampler2DShadow")) {
+                edits.add(new Edit(uniform.start(1), uniform.end(1), "sampler2D"));
+            } else if (!type.startsWith("sampler")) {
                 edits.add(blank(source, uniform));
             }
         }
@@ -138,7 +144,7 @@ public final class TerrainShaderTranslator {
             edits.add(new Edit(varying.start(), varying.end(), String.join(" ", declarations)));
         }
 
-        var word = Pattern.compile("\\b(?:gl_\\w+|texture2D\\w*|shadow2D)\\b").matcher(masked);
+        var word = Pattern.compile("\\b(?:gl_\\w+|texture2D\\w*|shadow2D|ftransform)\\b").matcher(masked);
         while (word.find()) {
             String replacement = BUILTINS.get(word.group());
             if (replacement != null) {

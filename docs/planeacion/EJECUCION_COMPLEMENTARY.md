@@ -75,6 +75,12 @@ La declaración GLSL y los offsets Java se generan a partir del mismo layout std
 
 El mismo bloque std140 se probó con la resolución, relación de aspecto, rango de cámara, tiempo, día, fase lunar, lluvia y colores de cielo y niebla del mundo. La lectura GPU también comprobó las dimensiones del atlas, una muestra de la textura de piedra y la diferencia entre muestras de luz mínima y máxima del lightmap de Minecraft. El ensayo pasó en OpenGL y Vulkan. El programa que verifica la lectura usa GLSL de diagnóstico. Quedan los recursos específicos del pack, entre ellos sombras y texturas de sus pases, y la prueba de dibujo con el programa real.
 
+## Sombras (E07, en curso)
+
+El JAR tradujo y enlazó los archivos `world0/shadow.vsh` y `world0/shadow.fsh` de Complementary r5.9.3 con las dos salidas [0, 1] en OpenGL y Vulkan. El traductor adapta `ftransform()` y la comparación de profundidad de `shadow2D`. RenderPearl permite leer la profundidad con un sampler regular, así que la comparación legacy se reproduce con cuatro texels y filtrado bilineal. La prueba cuantitativa verificó los resultados iluminado (1), ocluido (0) y filtrado (0.5) desde una textura D32 en ambos backends.
+
+El resultado GPU se obtuvo con profundidades sintéticas. Falta generar las matrices de luz, dibujar los bloques y demás objetos del mundo con `shadow` y entregar sus mapas al terreno de Complementary.
+
 ## Hallazgo para E10
 
 Las fuentes de la plataforma fijada exponen únicamente VERTEX y FRAGMENT en `com/mojang/renderpearl/api/pipeline/ShaderType.java`. `GpuDevice`/`CommandEncoder` no exponen dispatch de compute; `UniformType` ofrece sampler, uniform buffer y texel buffer, sin contrato SSBO/storage-image. Por tanto, compute/imágenes/SSBO requieren ampliar el puente, no activar flags falsos. Este hallazgo no se marca como una implementación de E10 ni impide continuar el camino gráfico base.

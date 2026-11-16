@@ -78,6 +78,7 @@ public final class TerrainSmokeProbe {
     private static volatile boolean captureStarted;
     private static volatile boolean vertexVerified;
     private static volatile boolean uniformsVerified;
+    private static volatile boolean shadowsVerified;
     private static com.prismora.compat.TerrainShaderTranslator.Program terrainProgram;
     private record SectionMesh(SectionPos section, List<TerrainVertexData> faces) {}
     private static final AtomicReference<SectionMesh> captured = new AtomicReference<>();
@@ -126,8 +127,9 @@ public final class TerrainSmokeProbe {
             var frame = cameraFrame;
             TerrainVertexSmokeProbe.submit(sample.faces(), frame.clipFromSection(sample.section()), () -> vertexVerified = true);
             TerrainUniformSmokeProbe.submit(terrainProgram, frame, sample.section(), () -> uniformsVerified = true);
+            ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
         }
-        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified))) {
+        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified && shadowsVerified))) {
             if (materials != null) {
                 Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MATERIAL_PASS: {} states mapped; section {} contains {} block-model faces; oak leaves 10009/10011",
                         materials.size(), sample.section(), sample.faces().size());
