@@ -97,7 +97,7 @@ El ensayo presenta `final` en el framebuffer principal de Minecraft al terminar 
 
 El ensayo siguiente presentó tres orientaciones sucesivas de cámara (0, 14 y 28 grados) en una misma sección. Cada giro vuelve a ejecutar el `shadow`, el terreno y los nueve pases posteriores reales, reutilizando el buffer de la malla y los 11 programas compilados. La lectura verificó 355 612 y 304 696 píxeles distintos entre capturas consecutivas en OpenGL, y 355 565 y 304 692 en Vulkan. Las capturas se guardan como `complementary-present.png`, `complementary-present-2.png` y `complementary-present-3.png`.
 
-El ensayo ejecuta una secuencia de tres poses y recrea los adjuntos y el historial al cambiar de pose. Quedan el renderizado continuo, la incorporación de las demás secciones visibles, los mipmaps, las transparencias, el cielo y la activación desde el menú.
+El ensayo dibuja dos secciones adyacentes con 1 002 caras y reutiliza la malla, los pipelines y los adjuntos persistentes de posprocesado durante los tres giros de cámara. OpenGL y Vulkan verifican que el primer composite6 de cada giro recibe la misma textura de historial colortex2 y las matrices de la pose anterior. Los adjuntos de sombra y geometría del ensayo se reconstruyen por pose. Quedan el renderizado continuo, la incorporación de las demás secciones visibles, los mipmaps, las transparencias, el cielo y la activación desde el menú.
 
 ## Hallazgo para E10
 

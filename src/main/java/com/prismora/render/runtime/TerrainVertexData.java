@@ -43,6 +43,13 @@ public record TerrainVertexData(int materialId, TerrainQuadAttributes attributes
         return new TerrainVertexData(materialId, TerrainQuadAttributes.from(quad), corners);
     }
 
+    public TerrainVertexData offset(float x, float y, float z) {
+        return new TerrainVertexData(materialId, attributes, corners.stream()
+                .map(corner -> new Corner(corner.x() + x, corner.y() + y, corner.z() + z,
+                        corner.u(), corner.v(), corner.argb(), corner.light()))
+                .toList());
+    }
+
     public void writeVertex(ByteBuffer buffer, int index) {
         var point = corners.get(index);
         buffer.putFloat(point.x()).putFloat(point.y()).putFloat(point.z());

@@ -18,11 +18,11 @@ import com.prismora.render.runtime.TerrainVertexData;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.atomic.AtomicReference;
+
 import java.util.IdentityHashMap;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
+
 import net.minecraft.core.SectionPos;
 import com.prismora.render.runtime.TerrainCameraFrame;
 import org.joml.Matrix4fc;
@@ -85,11 +85,13 @@ public final class TerrainSmokeProbe {
     private static volatile boolean shadowsVerified;
     private static TerrainPackCompileProbe.Programs packPrograms;
     private record SectionMesh(SectionPos section, List<TerrainVertexData> faces) {}
-    private static final AtomicReference<SectionMesh> captured = new AtomicReference<>();
-    private static final AtomicBoolean captureInProgress = new AtomicBoolean();
+    private static final Map<SectionPos, List<TerrainVertexData>> captured = new java.util.concurrent.ConcurrentHashMap<>();
+    private static SectionMesh previewScene;
+
     private static final ThreadLocal<SectionMesh> building = new ThreadLocal<>();
     private static final SectionPos PRESENT_SECTION = SectionPos.of(-33, 4, 4);
     private static final List<Integer> PREVIEW_YAW = List.of(0, 14, 28);
+    private static final List<SectionPos> PREVIEW_SECTIONS = List.of(PRESENT_SECTION, SectionPos.of(-34, 4, 4));
     private static final String PACK_FILE = System.getProperty("prismora.terrainPack", "");
 
     private TerrainSmokeProbe() {}
@@ -100,7 +102,7 @@ public final class TerrainSmokeProbe {
         }
         var client = Minecraft.getInstance();
         if (++ticks > 1000) {
-            throw new IllegalStateException("Terrain MRT probe timed out after " + readbacks + " GPU reads; pending=" + pending + ", visible section captured=" + (captured.get() != null) + ", MRT pixels=" + verifiedPixels);
+            throw new IllegalStateException("Terrain MRT probe timed out after " + readbacks + " GPU reads; pending=" + pending + ", visible section captured=" + captured.keySet() + ", MRT pixels=" + verifiedPixels);
         }
         if (!openingWorld && ticks > 60 && client.isGameLoadFinished() && client.gui.overlay() == null) {
             openingWorld = true;
@@ -139,12 +141,15 @@ public final class TerrainSmokeProbe {
                 client.levelRenderer.invalidateCompiledGeometry(client.level, client.options, client.gameRenderer.mainCamera(), client.getBlockColors());
             }
         }
-        var sample = captured.get();
+        if (previewScene == null && captured.keySet().containsAll(PREVIEW_SECTIONS)) {
+            previewScene = mergePreviewSections();
+        }
+        var sample = previewScene;
         if (worldTicks > 40 && sample != null && cameraFrame != null && !vertexSubmitted) {
             vertexSubmitted = true;
             var frame = cameraFrame;
             var sky = client.gameRenderer.gameRenderState().levelRenderState.skyRenderState;
-            var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle);
+            var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle, new org.joml.Vector3f(0, 8, 8), 24f);
             previewMesh = TerrainVertexSmokeProbe.upload(sample.faces());
             TerrainVertexSmokeProbe.submit(previewMesh, sample.faces(), frame, sample.section(), light, packPrograms, () -> vertexVerified = true);
             TerrainUniformSmokeProbe.submit(packPrograms.terrain(), frame, sample.section(), () -> uniformsVerified = true);
@@ -160,12 +165,15 @@ public final class TerrainSmokeProbe {
                 materials = null;
             }
             if (!PACK_FILE.isEmpty()) {
+                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_MULTISECTION_PASS: {} sections, {} faces submitted together",
+                        PREVIEW_SECTIONS.size(), sample.faces().size());
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_LIVE_SEQUENCE_PASS: {} poses presented with {} reused real pipelines",
                         PREVIEW_YAW.size(), ComplementaryPreviewPipelines.size());
             }
             finished = true;
             ComplementaryPresentProbe.close();
             ComplementaryPreviewPipelines.close();
+            ComplementaryPostDrawProbe.close();
             if (previewMesh != null) previewMesh.close();
             readback.close();
             depth.close();
@@ -195,7 +203,7 @@ public final class TerrainSmokeProbe {
         }
         poseRendering = true;
         var sky = state.skyRenderState;
-        var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle);
+        var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle, new org.joml.Vector3f(0, 8, 8), 24f);
         ComplementaryShadowSmokeProbe.submit(packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
                 sample.section(), packPrograms.terrain(), packPrograms.post(), () -> poseVerified = true);
     }
@@ -207,16 +215,21 @@ public final class TerrainSmokeProbe {
         }
     }
 
-    public static void beginSection(SectionPos section) {
-        var frame = cameraFrame;
-        if (captureStarted && materials != null && section.equals(PRESENT_SECTION) && captured.get() == null && frame != null
-                && new org.joml.FrustumIntersection(frame.clipFromSection(section)).testAab(0, 0, 0, 16, 16, 16)
-                && captureInProgress.compareAndSet(false, true)) {
-            if (captured.get() == null) {
-                building.set(new SectionMesh(section, new ArrayList<>()));
-            } else {
-                captureInProgress.set(false);
+    private static SectionMesh mergePreviewSections() {
+        var anchor = PRESENT_SECTION.origin();
+        var faces = new ArrayList<TerrainVertexData>();
+        for (var section : PREVIEW_SECTIONS) {
+            var origin = section.origin();
+            for (var face : captured.get(section)) {
+                faces.add(face.offset(origin.getX() - anchor.getX(), origin.getY() - anchor.getY(), origin.getZ() - anchor.getZ()));
             }
+        }
+        return new SectionMesh(PRESENT_SECTION, List.copyOf(faces));
+    }
+
+    public static void beginSection(SectionPos section) {
+        if (captureStarted && materials != null && PREVIEW_SECTIONS.contains(section) && !captured.containsKey(section)) {
+            building.set(new SectionMesh(section, new ArrayList<>()));
         }
     }
 
@@ -225,38 +238,14 @@ public final class TerrainSmokeProbe {
     }
 
     public static void endSection() {
-        if (materials == null) {
+        var result = building.get();
+        if (result == null) {
             return;
         }
-        var result = building.get();
-        if (result != null) {
-            building.remove();
-            if (containsVisibleFace(result)) {
-                captured.set(new SectionMesh(result.section(), List.copyOf(result.faces())));
-                Prismora.LOGGER.info("Prismora camera terrain section {} captured with {} faces", result.section(), result.faces().size());
-            }
-            captureInProgress.set(false);
+        building.remove();
+        if (!result.faces().isEmpty() && captured.putIfAbsent(result.section(), List.copyOf(result.faces())) == null) {
+            Prismora.LOGGER.info("Prismora camera terrain section {} captured with {} faces", result.section(), result.faces().size());
         }
-    }
-
-    private static boolean containsVisibleFace(SectionMesh mesh) {
-        var frustum = new org.joml.FrustumIntersection(cameraFrame.clipFromSection(mesh.section()));
-        for (var face : mesh.faces()) {
-            float minX = Float.POSITIVE_INFINITY, minY = Float.POSITIVE_INFINITY, minZ = Float.POSITIVE_INFINITY;
-            float maxX = Float.NEGATIVE_INFINITY, maxY = Float.NEGATIVE_INFINITY, maxZ = Float.NEGATIVE_INFINITY;
-            for (var corner : face.corners()) {
-                minX = Math.min(minX, corner.x());
-                minY = Math.min(minY, corner.y());
-                minZ = Math.min(minZ, corner.z());
-                maxX = Math.max(maxX, corner.x());
-                maxY = Math.max(maxY, corner.y());
-                maxZ = Math.max(maxZ, corner.z());
-            }
-            if (frustum.testAab(minX, minY, minZ, maxX, maxY, maxZ)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     public static int materialId(BlockState state) {

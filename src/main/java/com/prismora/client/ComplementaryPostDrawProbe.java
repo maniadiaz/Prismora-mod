@@ -25,7 +25,22 @@ final class ComplementaryPostDrawProbe {
             }
             """;
 
+    private static GpuTargets persistentTargets;
+    private static TerrainCameraFrame previousPose;
+    private static GpuTextureView previousHistory;
+    private static int submissions;
+
     private ComplementaryPostDrawProbe() {}
+
+    static void close() {
+        if (persistentTargets != null) {
+            persistentTargets.close();
+            persistentTargets = null;
+        }
+        previousHistory = null;
+        previousPose = null;
+        submissions = 0;
+    }
 
     static void submit(List<ComplementaryPostCompileProbe.Pass> programs, GpuTargets terrain, GpuTextureView depth,
                        GpuTextureView noise, GpuSampler repeat, TerrainCameraFrame camera, TerrainSceneUniforms scene,
@@ -51,7 +66,14 @@ final class ComplementaryPostDrawProbe {
         specs.put(14, depthSpec);
         var readback = device.createBuffer(() -> "Complementary final pixels", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ,
                 (long) frameBytes * 2 + (long) historyBytes * 2);
-        try (var buffers = new GpuTargets(device, specs, width, height, 4L * 1024 * 1024);
+        if (persistentTargets == null) {
+            persistentTargets = new GpuTargets(device, specs, width, height, 4L * 1024 * 1024);
+        }
+        var buffers = persistentTargets;
+        var lastPose = previousPose == null ? camera : previousPose;
+        var lastHistory = previousHistory;
+        int startingFrame = submissions * 2;
+        try (
              var output = device.createTexture("Complementary final output",
                      GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC, GpuFormat.RGBA8_UNORM, width, height, 1, 1);
              var outputView = device.createTextureView(output);
@@ -82,6 +104,10 @@ final class ComplementaryPostDrawProbe {
                     var slots = shader.outputSlots().stream().mapToInt(java.util.OptionalInt::orElseThrow).boxed().toList();
                     boolean finalPass = post.name().equals("final");
                     var destinations = finalPass ? List.of(outputView) : slots.stream().map(buffers::write).toList();
+                    if (frame == 0 && lastHistory != null && post.name().equals("composite6")
+                            && available.get("colortex2") != lastHistory) {
+                        throw new IllegalStateException("Camera update lost the previous pose history");
+                    }
                     if (frame == 1 && post.name().equals("composite6") && shader.samplers().contains("colortex2")) {
                         historyReused = firstHistory != null && available.get("colortex2") == firstHistory;
                     }
@@ -94,7 +120,7 @@ final class ComplementaryPostDrawProbe {
                     var program = ComplementaryPreviewPipelines.get(post.name(), () -> ComplementaryPostCompileProbe.compile(post));
                     try (
                          var uniforms = device.createBuffer(() -> "Complementary post scene", GpuBuffer.USAGE_UNIFORM,
-                                 parameters(shader, camera, scene, light, section, width, height, frame))) {
+                                 parameters(shader, camera, frame == 0 ? lastPose : camera, scene, light, section, width, height, startingFrame + frame))) {
                         var target = RenderPassDescriptor.builder(() -> "Complementary " + post.name());
                         destinations.forEach(target::withColorAttachment);
                         try (var pass = device.createCommandEncoder().createRenderPass(target.build())) {
@@ -125,7 +151,15 @@ final class ComplementaryPostDrawProbe {
                     throw new IllegalStateException("Complementary composite6 did not receive the previous frame's colortex2");
                 }
 
-                if (frame == 1) ComplementaryPresentProbe.stage(output);
+                if (frame == 1) {
+                    previousPose = camera;
+                    previousHistory = available.get("colortex2");
+                    submissions++;
+                    if (lastHistory != null) {
+                        Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_POSE_HISTORY_PASS: colortex2 survived camera update {}", submissions);
+                    }
+                    ComplementaryPresentProbe.stage(output);
+                }
                 var encoder = device.createCommandEncoder();
                 encoder.copyTextureToBuffer(output, readback, (long) frame * frameBytes, frame == 0 ? () -> {} : () -> {
                     try (readback; var mapping = readback.map(true, false)) {
@@ -176,7 +210,7 @@ final class ComplementaryPostDrawProbe {
         if (visible < 16) throw new IllegalStateException("Complementary final returned no visible terrain");
         return visible;
     }
-    private static java.nio.ByteBuffer parameters(TerrainShaderTranslator.Program shader, TerrainCameraFrame camera,
+    private static java.nio.ByteBuffer parameters(TerrainShaderTranslator.Program shader, TerrainCameraFrame camera, TerrainCameraFrame previous,
                                                     TerrainSceneUniforms scene, TerrainShadowFrame light, net.minecraft.core.SectionPos section, int width, int height, int frame) {
         var layout = new TerrainUniformLayout(shader.uniformTypes());
         var data = layout.allocate();
@@ -206,9 +240,10 @@ final class ComplementaryPostDrawProbe {
         layout.put(data, "shadowModelViewInverse", new Matrix4f(lightView).invert());
         layout.put(data, "shadowProjection", lightProjection);
         layout.put(data, "shadowProjectionInverse", new Matrix4f(lightProjection).invert());
-        layout.put(data, "gbufferPreviousProjection", projection);
-        layout.put(data, "gbufferPreviousModelView", view);
-        layout.putVec3(data, "previousCameraPosition", (float) eye.x, (float) eye.y, (float) eye.z);
+        layout.put(data, "gbufferPreviousProjection", previous.legacyProjection(RenderSystem.getDevice().getDeviceInfo().isZZeroToOne()));
+        layout.put(data, "gbufferPreviousModelView", previous.viewRotation());
+        var previousEye = previous.position();
+        layout.putVec3(data, "previousCameraPosition", (float) previousEye.x, (float) previousEye.y, (float) previousEye.z);
         if ("int".equals(shader.uniformTypes().get("frameCounter"))) layout.putInt(data, "frameCounter", frame);
         return data;
     }
