@@ -146,25 +146,10 @@ public final class TerrainSmokeProbe {
                 client.levelRenderer.invalidateCompiledGeometry(client.level, client.options, client.gameRenderer.mainCamera(), client.getBlockColors());
             }
         }
-        if (!vertexSubmitted && captureStarted && worldTicks > 40) {
-            var visible = visibleTerrain(client);
-            if (visible.size() >= 2) {
-                updatePreviewMesh(visible);
-            }
-        }
-        var sample = previewScene;
-        if (worldTicks > 40 && sample != null && cameraFrame != null && !vertexSubmitted) {
-            vertexSubmitted = true;
-            var frame = cameraFrame;
-            var sky = client.gameRenderer.gameRenderState().levelRenderState.skyRenderState;
-            var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle, new org.joml.Vector3f(8, 8, 8), 40f);
-            TerrainVertexSmokeProbe.submit(previewMesh, sample.faces(), frame, sample.section(), light, packPrograms, () -> vertexVerified = true);
-            TerrainUniformSmokeProbe.submit(packPrograms.terrain(), frame, sample.section(), () -> uniformsVerified = true);
-            ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
-        }
         if (vertexVerified && ComplementaryPresentProbe.verified()) {
             advancePreview(client);
         }
+        var sample = previewScene;
         if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified && shadowsVerified && ComplementaryPresentProbe.verified() && ComplementaryPresentProbe.generation() == PREVIEW_YAW.size() && poseVerified))) {
             if (materials != null) {
                 Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MATERIAL_PASS: {} states mapped; section {} contains {} block-model faces; oak leaves 10009/10011",
@@ -196,14 +181,19 @@ public final class TerrainSmokeProbe {
 
     private static void advancePreview(Minecraft client) {
         int presented = ComplementaryPresentProbe.generation();
-        if (presented < PREVIEW_YAW.size() && requestedPose < presented && (presented == 1 || poseVerified)) {
-            requestedPose = presented;
-            poseRendering = false;
-            poseVerified = false;
-            client.player.connection.sendCommand("tp @s " + PREVIEW_X.get(requestedPose) + " 76 70.5 " + PREVIEW_YAW.get(requestedPose) + " 75");
+        if (presented >= PREVIEW_YAW.size() || requestedPose >= presented || !poseVerified) {
             return;
         }
-        if (requestedPose == 0 || poseRendering) {
+        requestedPose = presented;
+        poseRendering = false;
+        poseVerified = false;
+        client.player.connection.sendCommand("tp @s " + PREVIEW_X.get(requestedPose) + " 76 70.5 " + PREVIEW_YAW.get(requestedPose) + " 75");
+    }
+
+    public static void renderComplementaryFrame() {
+        var client = Minecraft.getInstance();
+        if (finished || !captureStarted || worldTicks <= 40 || cameraFrame == null || poseRendering
+                || client.player == null || client.gui.overlay() != null || client.gui.screen() != null) {
             return;
         }
         var state = client.gameRenderer.gameRenderState().levelRenderState;
@@ -220,10 +210,16 @@ public final class TerrainSmokeProbe {
         poseRendering = true;
         var sky = state.skyRenderState;
         var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle, new org.joml.Vector3f(8, 8, 8), 40f);
+        if (!vertexSubmitted) {
+            vertexSubmitted = true;
+            TerrainVertexSmokeProbe.submit(previewMesh, sample.faces(), cameraFrame, sample.section(), light, () -> vertexVerified = true);
+            TerrainUniformSmokeProbe.submit(packPrograms.terrain(), cameraFrame, sample.section(), () -> uniformsVerified = true);
+            ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
+        }
         ComplementaryShadowSmokeProbe.submit(packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
                 sample.section(), packPrograms.terrain(), packPrograms.post(), () -> poseVerified = true);
+        Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_WORLD_FRAME_PASS: pose {} submitted shadow, terrain and post from renderLevel", requestedPose + 1);
     }
-
     public static void captureCamera(Matrix4fc projection) {
         if (materials != null) {
             var state = Minecraft.getInstance().gameRenderer.gameRenderState().levelRenderState.cameraRenderState;

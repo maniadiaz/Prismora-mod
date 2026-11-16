@@ -77,6 +77,9 @@ dependencies { implementation minecraft.dependency('net.minecraftforge:forge:26.
     foreach($marker in $markers){
         if(-not $log.Contains($marker)){throw "Missing packaged validation marker: $marker"}
     }
+    if ($packPath -and [regex]::Matches($log, 'PRISMORA_COMPLEMENTARY_WORLD_FRAME_PASS: pose [1-3] submitted').Count -ne 3) {
+        throw 'Expected all three Complementary poses to submit from the world render callback'
+    }
     if($log -notmatch "Using graphics backend $Backend"){throw 'Backend fallback detected'}
     Write-Output "Packaged Prismora JAR verified on $Backend"
 } finally { Pop-Location }
