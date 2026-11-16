@@ -24,7 +24,7 @@ final class ComplementaryTerrainDrawProbe {
 
     static void submit(ComplementaryFrameResources resources, TerrainShaderTranslator.Program shader, ByteBuffer payload, GpuBuffer vertices, int indicesCount,
                        GpuTextureView atlas, GpuTextureView noise, GpuSampler repeat, GpuTextureView shadowDepth,
-                       GpuTextureView shadowOpaqueDepth, GpuTextureView shadowColor, GpuTextureView shadowShaftColor, List<ComplementaryPostCompileProbe.Pass> post,
+                       GpuTextureView shadowOpaqueDepth, GpuTextureView shadowColor, GpuTextureView shadowShaftColor, List<ComplementaryPostCompileProbe.Pass> post, ComplementaryPostCompileProbe.Pass sky,
                        TerrainCameraFrame camera, TerrainSceneUniforms scene, TerrainShadowFrame light, net.minecraft.core.SectionPos section, Runnable completed) {
         var pending = new java.util.concurrent.atomic.AtomicInteger(2);
         Runnable verified = () -> { if (pending.decrementAndGet() == 0) completed.run(); };
@@ -34,7 +34,8 @@ final class ComplementaryTerrainDrawProbe {
         var material = new GpuTargets.Spec(TargetFormat.RGB8, 1, 1, false, 0, 0, 0, 1);
         var normal = new GpuTargets.Spec(TargetFormat.RGBA8_SNORM, 1, 1, false, 0, 0, 0, 0);
         int width = resources.width(), height = resources.height();
-        var readback = device.createBuffer(() -> "Complementary terrain witness", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ, width * height * 4L);
+        long witnessBytes = (long) width * height * 4;
+        var readback = device.createBuffer(() -> "Complementary terrain witness", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ, witnessBytes * 2);
         try {
             var targets = resources.get("terrain colors", GpuTargets.class,
                     () -> new GpuTargets(device, Map.of(0, color, 6, material, 4, normal), width, height, 8L * 1024 * 1024));
@@ -50,6 +51,7 @@ final class ComplementaryTerrainDrawProbe {
             var specularView = resources.get("specular view", GpuTextureView.class, () -> device.createTextureView(specular));
             targets.clear(true);
             depth.beginFrame();
+            ComplementarySkyPass.draw(sky, targets.write(0), noise, repeat, camera, scene);
             try (var uniforms = device.createBuffer(() -> "Complementary terrain scene", GpuBuffer.USAGE_UNIFORM, payload);
                  var witness = witnessProgram();
                  var output = device.createTexture("Complementary terrain validation", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC,
@@ -68,12 +70,18 @@ final class ComplementaryTerrainDrawProbe {
 
                 var encoder = device.createCommandEncoder();
                 var sceneDepth = depth.view(GpuDepthTargets.Stage.SCENE);
+                var witnessInputs = Map.of("TerrainDepth", sceneDepth, "Color", targets.write(0),
+                        "Material", targets.write(6), "NormalData", targets.write(4));
+                MrtPass.draw(device, witness, List.of(outputView), witnessInputs, nearest);
+                encoder.copyTextureToBuffer(output, readback, 0, () -> {}, 0);
+                encoder.submit();
+
                 var passDescription = RenderPassDescriptor.builder(() -> "Complementary gbuffers_terrain draw")
                         .withColorAttachment(targets.write(0)).withColorAttachment(targets.write(6)).withColorAttachment(targets.write(4))
                         .withDepthAttachment(sceneDepth).build();
                 var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
                 var indexBuffer = indices.getBuffer(indicesCount);
-                try (var pass = encoder.createRenderPass(passDescription)) {
+                try (var pass = device.createCommandEncoder().createRenderPass(passDescription)) {
                     pass.setPipeline(program.compiled());
                     pass.setVertexBuffer(0, vertices.slice());
                     pass.setIndexBuffer(indexBuffer, indices.type());
@@ -86,16 +94,18 @@ final class ComplementaryTerrainDrawProbe {
                 ComplementaryPostDrawProbe.submit(resources, post, targets, sceneDepth, noise, repeat, camera, scene, light, section,
                         Map.of("shadowtex0", shadowDepth, "shadowtex1", shadowOpaqueDepth,
                                 "shadowcolor0", shadowColor, "shadowcolor1", shadowShaftColor), verified);
-                MrtPass.draw(device, witness, List.of(outputView), Map.of("TerrainDepth", sceneDepth,
-                        "Color", targets.write(0), "Material", targets.write(6), "NormalData", targets.write(4)), nearest);
-                encoder.copyTextureToBuffer(output, readback, 0, () -> {
-                    int colorCount = 0, materialCount = 0, normalCount = 0;
+                MrtPass.draw(device, witness, List.of(outputView), witnessInputs, nearest);
+                var readEncoder = device.createCommandEncoder();
+                readEncoder.copyTextureToBuffer(output, readback, witnessBytes, () -> {
+                    int colorCount = 0, materialCount = 0, normalCount = 0, skyCount = 0;
                     try (readback; var mapping = readback.map(true, false)) {
                         var bytes = mapping.data();
                         for (int i = 0; i < width * height * 4; i += 4) {
-                            if (bytes.get(i) != 0) colorCount++;
-                            if (bytes.get(i + 1) != 0) materialCount++;
-                            if (bytes.get(i + 2) != 0) normalCount++;
+                            int terrainPixel = Math.toIntExact(witnessBytes) + i;
+                            if (bytes.get(terrainPixel) != 0) colorCount++;
+                            if (bytes.get(terrainPixel + 1) != 0) materialCount++;
+                            if (bytes.get(terrainPixel + 2) != 0) normalCount++;
+                            if (bytes.get(i + 3) != 0) skyCount++;
                         }
                     }
                     if (colorCount < 16 || materialCount < 16 || normalCount < 16) {
@@ -104,9 +114,13 @@ final class ComplementaryTerrainDrawProbe {
                     }
                     Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TERRAIN_DRAW_PASS: colortex0={}, colortex6={}, colortex4={}, samplers={}",
                             colorCount, materialCount, normalCount, required);
+                    if (skyCount < 16) {
+                        throw new IllegalStateException("Complementary sky did not write enough background pixels: " + skyCount);
+                    }
+                    Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SKY_DRAW_PASS: {} colored pixels without terrain depth", skyCount);
                     verified.run();
                 }, 0);
-                encoder.submit();
+                readEncoder.submit();
             }
         } catch (RuntimeException failure) {
             readback.close();
@@ -131,7 +145,7 @@ final class ComplementaryTerrainDrawProbe {
                     vec4 c=texelFetch(NormalData,p,0);
                     bool covered=z>0.0&&z<=1.0;
                     result=vec4(float(covered&&all(lessThan(abs(a),vec3(65504)))&&length(a)>0.0001),
-                        float(covered&&any(greaterThan(b,vec3(0.0)))),float(covered&&length(c.xyz)>0.1),1.0);
+                        float(covered&&any(greaterThan(b,vec3(0.0)))),float(covered&&length(c.xyz)>0.1),float(!covered&&all(lessThan(abs(a),vec3(65504)))&&length(a)>0.0001));
                 }
                 """, List.of(GpuFormat.RGBA8_UNORM), List.of("TerrainDepth", "Color", "Material", "NormalData"));
     }

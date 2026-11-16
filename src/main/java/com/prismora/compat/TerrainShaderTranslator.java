@@ -77,6 +77,7 @@ public final class TerrainShaderTranslator {
                 #define UV0 prismoraScreenUv()
                 #define Position vec3(UV0,0.0)
                 #define UV2 ivec2(0)
+                #define Color vec4(1.0)
                 vec4 prismoraTransform(){ return vec4(UV0*2.0-1.0,0.0,1.0); }
                 """ : """
                 layout(location=0) in vec3 Position;

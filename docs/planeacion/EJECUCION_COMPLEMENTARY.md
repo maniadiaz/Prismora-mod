@@ -102,3 +102,9 @@ El modo diagnóstico consulta en cada frame la lista de secciones visibles de Mi
 ## Hallazgo para E10
 
 Las fuentes de la plataforma fijada exponen únicamente VERTEX y FRAGMENT en `com/mojang/renderpearl/api/pipeline/ShaderType.java`. `GpuDevice`/`CommandEncoder` no exponen dispatch de compute; `UniformType` ofrece sampler, uniform buffer y texel buffer, sin contrato SSBO/storage-image. Por tanto, compute/imágenes/SSBO requieren ampliar el puente, no activar flags falsos. Este hallazgo no se marca como una implementación de E10 ni impide continuar el camino gráfico base.
+
+## Etapa 2.1. Cielo y atmósfera
+
+El diagnóstico del Overworld ejecuta el programa real gbuffers_skybasic de Complementary Reimagined r5.9.3 antes de dibujar el terreno. El programa escribe el fondo en colortex0 sin tocar la profundidad y recibe la proyección, la orientación de la cámara y los valores de escena. La lectura de GPU se hace antes de la pasada opaca para comprobar la cobertura del cielo aunque el terreno ocupe toda la vista. La prueba también vuelve a ejecutar el cielo después de redimensionar los adjuntos.
+
+Quedan por integrar el pase de sol y luna texturizados y la geometría de precipitación. Falta una prueba visual específica de nubes, niebla y cambios de clima.

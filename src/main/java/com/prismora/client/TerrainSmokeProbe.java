@@ -267,7 +267,7 @@ public final class TerrainSmokeProbe {
             ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
         }
         ComplementaryShadowSmokeProbe.submit(resources, packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
-                sample.section(), packPrograms.terrain(), packPrograms.post(), () -> poseVerified = true);
+                sample.section(), packPrograms.terrain(), packPrograms.post(), packPrograms.sky(), () -> poseVerified = true);
         if (requestedPose == 0) {
             firstFrameResources = resources;
             firstResourceCount = resources.size();
