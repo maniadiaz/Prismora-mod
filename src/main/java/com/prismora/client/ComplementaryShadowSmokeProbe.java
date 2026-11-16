@@ -34,7 +34,7 @@ final class ComplementaryShadowSmokeProbe {
     private ComplementaryShadowSmokeProbe() {}
 
     static void submit(Inputs inputs, GpuBuffer vertices, int faceCount, TerrainShadowFrame light,
-                       TerrainCameraFrame camera, SectionPos section, Runnable completed) {
+                       TerrainCameraFrame camera, SectionPos section, TerrainShaderTranslator.Program terrain, Runnable completed) {
         var device = RenderSystem.getDevice();
         var client = Minecraft.getInstance();
         var shader = inputs.shader();
@@ -71,6 +71,33 @@ final class ComplementaryShadowSmokeProbe {
         layout.putFloat(uniformData, "sunAngle", sun - (float) Math.floor(sun));
         layout.putInt(uniformData, "entityId", 0);
 
+        var terrainLayout = new TerrainUniformLayout(terrain.uniformTypes());
+        var terrainData = terrainLayout.allocate();
+        scene.write(terrainLayout, terrainData);
+        terrainLayout.putFloat(terrainData, "viewWidth", 128);
+        terrainLayout.putFloat(terrainData, "viewHeight", 128);
+        terrainLayout.putFloat(terrainData, "aspectRatio", 1);
+        var terrainView = camera.modelViewFromSection(section);
+        terrainLayout.put(terrainData, "prismoraProjection", cameraProjection);
+        terrainLayout.put(terrainData, "prismoraModelView", terrainView);
+        terrainLayout.put(terrainData, "prismoraNormalMatrix", new Matrix3f(terrainView).invert().transpose());
+        terrainLayout.put(terrainData, "gbufferProjection", cameraProjection);
+        terrainLayout.put(terrainData, "gbufferProjectionInverse", new Matrix4f(cameraProjection).invert());
+        terrainLayout.put(terrainData, "gbufferModelView", cameraView);
+        terrainLayout.put(terrainData, "gbufferModelViewInverse", new Matrix4f(cameraView).invert());
+        terrainLayout.put(terrainData, "shadowProjection", projection);
+        terrainLayout.put(terrainData, "shadowProjectionInverse", new Matrix4f(projection).invert());
+        terrainLayout.put(terrainData, "shadowModelView", viewFromCamera);
+        terrainLayout.put(terrainData, "shadowModelViewInverse", new Matrix4f(viewFromCamera).invert());
+        terrainLayout.putMatrixPair(terrainData, "prismoraTextureMatrix", new Matrix4f(),
+                new Matrix4f().scaling(1f / 256f, 1f / 256f, 1f / 256f).m30(1f / 32f).m31(1f / 32f));
+        terrainLayout.putVec3(terrainData, "cameraPosition", (float) eye.x, (float) eye.y, (float) eye.z);
+        terrainLayout.putFloat(terrainData, "frameTimeCounter", (System.nanoTime() - START) / 1e9f % 3600f);
+        terrainLayout.putFloat(terrainData, "sunAngle", sun - (float) Math.floor(sun));
+        terrainLayout.putInt(terrainData, "entityId", 0);
+
+        var remaining = new java.util.concurrent.atomic.AtomicInteger(2);
+        Runnable verified = () -> { if (remaining.decrementAndGet() == 0) completed.run(); };
         var color = new GpuTargets.Spec(TargetFormat.RGBA8, 1, 1, false, 0, 0, 0, 0);
         var readback = device.createBuffer(() -> "Complementary shadow witness", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ,
                 SIZE * SIZE * 4L);
@@ -113,6 +140,9 @@ final class ComplementaryShadowSmokeProbe {
                 }
                 pass.drawIndexed(count, 1, 0, 0, 0);
             }
+            depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
+            ComplementaryTerrainDrawProbe.submit(terrain, terrainData, vertices, count, atlas, noise.getTextureView(), repeat,
+                    depthView, depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY), targets.write(0), verified);
             MrtPass.draw(device, check, List.of(outputView), Map.of("ShadowDepth", depthView,
                     "ShadowColor0", targets.write(0), "ShadowColor1", targets.write(1)), nearest);
             encoder.copyTextureToBuffer(output, readback, 0, () -> {
@@ -131,7 +161,7 @@ final class ComplementaryShadowSmokeProbe {
                 }
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SHADOW_DRAW_PASS: {} faces, depth={}, shadowcolor0={}, shadowcolor1={}, samplers={}",
                         faceCount, depthCount, color0Count, color1Count, required);
-                completed.run();
+                verified.run();
             }, 0);
             encoder.submit();
         } catch (IOException | RuntimeException failure) {

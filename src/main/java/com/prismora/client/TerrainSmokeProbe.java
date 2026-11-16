@@ -127,7 +127,7 @@ public final class TerrainSmokeProbe {
             var frame = cameraFrame;
             var sky = client.gameRenderer.gameRenderState().levelRenderState.skyRenderState;
             var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle);
-            TerrainVertexSmokeProbe.submit(sample.faces(), frame, sample.section(), light, packPrograms.shadow(), () -> vertexVerified = true);
+            TerrainVertexSmokeProbe.submit(sample.faces(), frame, sample.section(), light, packPrograms, () -> vertexVerified = true);
             TerrainUniformSmokeProbe.submit(packPrograms.terrain(), frame, sample.section(), () -> uniformsVerified = true);
             ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
         }
