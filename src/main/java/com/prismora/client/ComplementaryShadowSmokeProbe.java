@@ -142,7 +142,8 @@ final class ComplementaryShadowSmokeProbe {
             }
             depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
             ComplementaryTerrainDrawProbe.submit(terrain, terrainData, vertices, count, atlas, noise.getTextureView(), repeat,
-                    depthView, depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY), targets.write(0), post, camera, scene, verified);
+                    depthView, depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY), targets.write(0), targets.write(1),
+                    post, camera, scene, light, section, verified);
             MrtPass.draw(device, check, List.of(outputView), Map.of("ShadowDepth", depthView,
                     "ShadowColor0", targets.write(0), "ShadowColor1", targets.write(1)), nearest);
             encoder.copyTextureToBuffer(output, readback, 0, () -> {

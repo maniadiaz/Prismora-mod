@@ -79,7 +79,7 @@ final class ComplementaryPostCompileProbe {
         return (deferred ? 0 : 100) + (index.isEmpty() ? 0 : Integer.parseInt(index));
     }
 
-    private static GpuFormat format(int slot) {
+    static GpuFormat format(int slot) {
         return switch (slot) {
             case 0 -> TargetFormat.R11F_G11F_B10F.physical();
             case 1 -> TargetFormat.RGB8_SNORM.physical();

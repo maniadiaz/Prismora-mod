@@ -25,8 +25,8 @@ final class ComplementaryTerrainDrawProbe {
 
     static void submit(TerrainShaderTranslator.Program shader, ByteBuffer payload, GpuBuffer vertices, int indicesCount,
                        GpuTextureView atlas, GpuTextureView noise, GpuSampler repeat, GpuTextureView shadowDepth,
-                       GpuTextureView shadowOpaqueDepth, GpuTextureView shadowColor, List<ComplementaryPostCompileProbe.Pass> post,
-                       TerrainCameraFrame camera, TerrainSceneUniforms scene, Runnable completed) {
+                       GpuTextureView shadowOpaqueDepth, GpuTextureView shadowColor, GpuTextureView shadowShaftColor, List<ComplementaryPostCompileProbe.Pass> post,
+                       TerrainCameraFrame camera, TerrainSceneUniforms scene, TerrainShadowFrame light, net.minecraft.core.SectionPos section, Runnable completed) {
         var pending = new java.util.concurrent.atomic.AtomicInteger(2);
         Runnable verified = () -> { if (pending.decrementAndGet() == 0) completed.run(); };
         var device = RenderSystem.getDevice();
@@ -75,7 +75,9 @@ final class ComplementaryTerrainDrawProbe {
                 }
                 pass.drawIndexed(indicesCount, 1, 0, 0, 0);
             }
-            ComplementaryPostDrawProbe.submit(post, targets.write(0), sceneDepth, noise, repeat, camera, scene, verified);
+            ComplementaryPostDrawProbe.submit(post, targets, sceneDepth, noise, repeat, camera, scene, light, section,
+                    Map.of("shadowtex0", shadowDepth, "shadowtex1", shadowOpaqueDepth,
+                            "shadowcolor0", shadowColor, "shadowcolor1", shadowShaftColor), verified);
             MrtPass.draw(device, witness, List.of(outputView), Map.of("TerrainDepth", sceneDepth,
                     "Color", targets.write(0), "Material", targets.write(6), "NormalData", targets.write(4)), nearest);
             encoder.copyTextureToBuffer(output, readback, 0, () -> {

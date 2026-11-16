@@ -15,7 +15,8 @@ import java.util.List;
 import java.util.Map;
 
 final class ComplementaryPostDrawProbe {
-    private static final List<String> TAIL = List.of("composite3", "composite4", "composite5", "final");
+    private static final List<String> ORDER = List.of("deferred1", "composite", "composite1", "composite3", "composite4",
+            "composite5", "composite6", "composite7", "final");
     private static final String HEADER = "#version 330\n#extension GL_ARB_separate_shader_objects : require\n";
     private static final String QUAD = HEADER + """
             void main(){
@@ -26,21 +27,31 @@ final class ComplementaryPostDrawProbe {
 
     private ComplementaryPostDrawProbe() {}
 
-    static void submit(List<ComplementaryPostCompileProbe.Pass> programs, GpuTextureView terrain, GpuTextureView depth,
+    static void submit(List<ComplementaryPostCompileProbe.Pass> programs, GpuTargets terrain, GpuTextureView depth,
                        GpuTextureView noise, GpuSampler repeat, TerrainCameraFrame camera, TerrainSceneUniforms scene,
+                       TerrainShadowFrame light, net.minecraft.core.SectionPos section, Map<String, GpuTextureView> shadows,
                        Runnable completed) {
-        var passes = programs.stream().filter(pass -> TAIL.contains(pass.name())).toList();
-        if (!passes.stream().map(ComplementaryPostCompileProbe.Pass::name).toList().equals(TAIL)) {
-            throw new IllegalStateException("Incomplete Complementary postprocessing tail");
+        var order = programs.stream().map(ComplementaryPostCompileProbe.Pass::name).toList();
+        if (!order.equals(ORDER)) {
+            throw new IllegalStateException("Unexpected base Overworld post programs: " + order);
         }
         var device = RenderSystem.getDevice();
         var linear = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
         var nearest = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
-        int width = terrain.getWidth(0), height = terrain.getHeight(0);
-        var specs = Map.of(0, spec(GpuFormat.RG11B10_FLOAT), 3, spec(GpuFormat.RGBA8_UNORM), 14, spec(GpuFormat.R32_FLOAT));
+        int width = terrain.write(0).getWidth(0), height = terrain.write(0).getHeight(0);
+        int frameBytes = Math.multiplyExact(Math.multiplyExact(width, height), 4);
+        int historyBytes = Math.multiplyExact(Math.multiplyExact(width, height), GpuFormat.RGBA16_FLOAT.blockSize());
+        var specs = new java.util.LinkedHashMap<Integer, GpuTargets.Spec>();
+        for (int index : List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 13)) {
+            boolean persistent = List.of(1, 2, 4, 5, 7).contains(index);
+            var format = ComplementaryPostCompileProbe.format(index);
+            specs.put(index, new GpuTargets.Spec(format, 1, 1, persistent, 0, 0, 0, 0));
+        }
+        var depthSpec = new GpuTargets.Spec(GpuFormat.R32_FLOAT, 1, 1, true, 0, 0, 0, 0);
+        specs.put(14, depthSpec);
         var readback = device.createBuffer(() -> "Complementary final pixels", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ,
-                (long) width * height * 4);
-        try (var buffers = new GpuTargets(device, specs, width, height, 1024 * 1024);
+                (long) frameBytes * 2 + (long) historyBytes * 2);
+        try (var buffers = new GpuTargets(device, specs, width, height, 4L * 1024 * 1024);
              var output = device.createTexture("Complementary final output",
                      GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC, GpuFormat.RGBA8_UNORM, width, height, 1, 1);
              var outputView = device.createTextureView(output);
@@ -51,74 +62,120 @@ final class ComplementaryPostDrawProbe {
                      """, List.of(GpuFormat.R32_FLOAT), List.of("NativeDepth"))) {
             MrtPass.draw(device, convertDepth, List.of(buffers.write(14)), Map.of("NativeDepth", depth), nearest);
             var legacyDepth = buffers.write(14);
-            GpuTextureView currentColor = terrain;
-            for (var post : passes) {
-                var shader = post.shader();
-                int slot = shader.outputSlots().getFirst().orElseThrow();
-                if (shader.outputSlots().size() != 1 || (slot != 0 && slot != 3)) {
-                    throw new IllegalStateException("Unsupported targets in postprocessing tail: " + post.name());
-                }
-                boolean finalPass = post.name().equals("final");
-                var destination = finalPass ? outputView : buffers.write(slot);
-                var available = Map.of("colortex0", currentColor, "colortex3", buffers.read(3),
-                        "depthtex0", legacyDepth, "noisetex", noise);
-                if (!available.keySet().containsAll(shader.samplers())) {
-                    throw new IllegalStateException("Missing texture for Complementary " + post.name() + ": " + shader.samplers());
-                }
-                try (var program = ComplementaryPostCompileProbe.compile(post);
-                     var uniforms = device.createBuffer(() -> "Complementary post scene", GpuBuffer.USAGE_UNIFORM,
-                             parameters(shader, camera, scene, width, height))) {
-                    var target = RenderPassDescriptor.builder(() -> "Complementary " + post.name()).withColorAttachment(destination).build();
-                    try (var pass = device.createCommandEncoder().createRenderPass(target)) {
-                        pass.setPipeline(program.compiled());
-                        pass.setUniform(TerrainShaderTranslator.UNIFORM_BLOCK, uniforms);
-                        for (String name : shader.samplers()) {
-                            var source = available.get(name);
-                            if (source.texture() == destination.texture()) {
-                                throw new IllegalStateException("Complementary post attachment read/write alias: " + name);
-                            }
-                            pass.setUniform(name, source, name.equals("noisetex") ? repeat : name.equals("depthtex0") ? nearest : linear);
-                        }
-                        pass.draw(3, 1, 0, 0);
-                    }
-                }
-                if (!finalPass) {
-                    buffers.flip(List.of(slot));
-                    if (slot == 0) {
-                        currentColor = buffers.read(slot);
-                    }
-                }
-            }
+            GpuTextureView firstHistory = null;
+            boolean historyReused = false;
+            for (int frame = 0; frame < 2; frame++) {
+                buffers.clear(false);
+                if (frame == 1) copyHistory(firstHistory, readback, 2L * frameBytes + historyBytes);
+                var available = new java.util.HashMap<String, GpuTextureView>(shadows);
+                specs.keySet().stream().filter(index -> index != 14)
+                        .forEach(index -> available.put("colortex" + index, buffers.read(index)));
+                available.put("colortex0", terrain.write(0));
+                available.put("colortex4", terrain.write(4));
+                available.put("colortex6", terrain.write(6));
+                available.put("depthtex0", legacyDepth);
+                available.put("depthtex1", legacyDepth);
+                available.put("noisetex", noise);
 
-            var encoder = device.createCommandEncoder();
-            encoder.copyTextureToBuffer(output, readback, 0, () -> {
-                int visible = 0;
-                try (readback; var mapping = readback.map(true, false)) {
-                    var pixels = mapping.data();
-                    for (int i = 0; i < width * height * 4; i += 4) {
-                        if ((pixels.get(i + 3) & 255) != 255) {
-                            throw new IllegalStateException("Complementary final did not cover the output");
-                        }
-                        if ((pixels.get(i) & 255) + (pixels.get(i + 1) & 255) + (pixels.get(i + 2) & 255) > 24) {
-                            visible++;
+                for (var post : programs) {
+                    var shader = post.shader();
+                    var slots = shader.outputSlots().stream().mapToInt(java.util.OptionalInt::orElseThrow).boxed().toList();
+                    boolean finalPass = post.name().equals("final");
+                    var destinations = finalPass ? List.of(outputView) : slots.stream().map(buffers::write).toList();
+                    if (frame == 1 && post.name().equals("composite6") && shader.samplers().contains("colortex2")) {
+                        historyReused = firstHistory != null && available.get("colortex2") == firstHistory;
+                    }
+                    if (!available.keySet().containsAll(shader.samplers())) {
+                        var missing = new java.util.TreeSet<>(shader.samplers());
+                        missing.removeAll(available.keySet());
+                        throw new IllegalStateException("Missing texture for Complementary " + post.name() + ": " + missing);
+                    }
+
+                    try (var program = ComplementaryPostCompileProbe.compile(post);
+                         var uniforms = device.createBuffer(() -> "Complementary post scene", GpuBuffer.USAGE_UNIFORM,
+                                 parameters(shader, camera, scene, light, section, width, height, frame))) {
+                        var target = RenderPassDescriptor.builder(() -> "Complementary " + post.name());
+                        destinations.forEach(target::withColorAttachment);
+                        try (var pass = device.createCommandEncoder().createRenderPass(target.build())) {
+                            pass.setPipeline(program.compiled());
+                            pass.setUniform(TerrainShaderTranslator.UNIFORM_BLOCK, uniforms);
+                            for (String name : shader.samplers()) {
+                                var source = available.get(name);
+                                if (destinations.stream().anyMatch(destination -> source.texture() == destination.texture())) {
+                                    throw new IllegalStateException("Complementary post attachment read/write alias: " + name);
+                                }
+                                var sampler = name.equals("noisetex") ? repeat
+                                        : name.startsWith("depthtex") || name.startsWith("shadowtex") ? nearest : linear;
+                                pass.setUniform(name, source, sampler);
+                            }
+                            pass.draw(3, 1, 0, 0);
                         }
                     }
+                    if (!finalPass) {
+                        buffers.flip(slots);
+                        slots.forEach(index -> available.put("colortex" + index, buffers.read(index)));
+                    }
                 }
-                if (visible < 16) {
-                    throw new IllegalStateException("Complementary final returned no visible terrain");
+                if (frame == 0) {
+                    firstHistory = available.get("colortex2");
+                    copyHistory(firstHistory, readback, 2L * frameBytes);
                 }
-                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_POST_DRAW_PASS: {} produced {} non-dark pixels", TAIL, visible);
-                completed.run();
-            }, 0);
-            encoder.submit();
+                if (frame == 1 && !historyReused) {
+                    throw new IllegalStateException("Complementary composite6 did not receive the previous frame's colortex2");
+                }
+
+                var encoder = device.createCommandEncoder();
+                encoder.copyTextureToBuffer(output, readback, (long) frame * frameBytes, frame == 0 ? () -> {} : () -> {
+                    try (readback; var mapping = readback.map(true, false)) {
+                        int first = visiblePixels(mapping.data(), 0, frameBytes);
+                        int second = visiblePixels(mapping.data(), frameBytes, frameBytes);
+                        verifyHistory(mapping.data(), 2 * frameBytes, historyBytes);
+                        Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_POST_DRAW_PASS: {} linked passes, both frames drawn ({}, {} non-dark pixels), colortex2 reused",
+                                order.size(), first, second);
+                    }
+                    completed.run();
+                }, 0);
+                encoder.submit();
+            }
         } catch (RuntimeException failure) {
             readback.close();
             throw failure;
         }
     }
 
+    private static void copyHistory(GpuTextureView history, GpuBuffer destination, long offset) {
+        var encoder = RenderSystem.getDevice().createCommandEncoder();
+        encoder.copyTextureToBuffer(history.texture(), destination, offset, () -> {}, 0);
+        encoder.submit();
+    }
+
+    private static void verifyHistory(java.nio.ByteBuffer data, int start, int bytes) {
+        boolean nonzero = false;
+        for (int i = 0; i < bytes; i++) {
+            byte original = data.get(start + i);
+            nonzero |= original != 0;
+            if (original != data.get(start + bytes + i)) {
+                throw new IllegalStateException("colortex2 history changed before the second frame consumed it");
+            }
+        }
+        if (!nonzero) throw new IllegalStateException("Complementary did not write colortex2 history");
+    }
+
+    private static int visiblePixels(java.nio.ByteBuffer pixels, int start, int bytes) {
+        int visible = 0;
+        for (int i = start; i < start + bytes; i += 4) {
+            if ((pixels.get(i + 3) & 255) != 255) {
+                throw new IllegalStateException("Complementary final did not cover the output");
+            }
+            if ((pixels.get(i) & 255) + (pixels.get(i + 1) & 255) + (pixels.get(i + 2) & 255) > 24) {
+                visible++;
+            }
+        }
+        if (visible < 16) throw new IllegalStateException("Complementary final returned no visible terrain");
+        return visible;
+    }
     private static java.nio.ByteBuffer parameters(TerrainShaderTranslator.Program shader, TerrainCameraFrame camera,
-                                                    TerrainSceneUniforms scene, int width, int height) {
+                                                    TerrainSceneUniforms scene, TerrainShadowFrame light, net.minecraft.core.SectionPos section, int width, int height, int frame) {
         var layout = new TerrainUniformLayout(shader.uniformTypes());
         var data = layout.allocate();
         scene.write(layout, data);
@@ -139,10 +196,19 @@ final class ComplementaryPostDrawProbe {
         layout.put(data, "gbufferModelViewInverse", new Matrix4f(view).invert());
         var eye = camera.position();
         layout.putVec3(data, "cameraPosition", (float) eye.x, (float) eye.y, (float) eye.z);
+        var origin = section.origin();
+        var lightView = light.viewFromSection().translate((float) (eye.x - origin.getX()),
+                (float) (eye.y - origin.getY()), (float) (eye.z - origin.getZ()));
+        var lightProjection = light.legacyProjection();
+        layout.put(data, "shadowModelView", lightView);
+        layout.put(data, "shadowModelViewInverse", new Matrix4f(lightView).invert());
+        layout.put(data, "shadowProjection", lightProjection);
+        layout.put(data, "shadowProjectionInverse", new Matrix4f(lightProjection).invert());
+        layout.put(data, "gbufferPreviousProjection", projection);
+        layout.put(data, "gbufferPreviousModelView", view);
+        layout.putVec3(data, "previousCameraPosition", (float) eye.x, (float) eye.y, (float) eye.z);
+        if ("int".equals(shader.uniformTypes().get("frameCounter"))) layout.putInt(data, "frameCounter", frame);
         return data;
     }
 
-    private static GpuTargets.Spec spec(GpuFormat format) {
-        return new GpuTargets.Spec(format, 1, 1, false, 0, 0, 0, 0);
-    }
 }
