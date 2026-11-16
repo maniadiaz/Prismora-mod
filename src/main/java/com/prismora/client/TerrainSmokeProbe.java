@@ -219,7 +219,9 @@ public final class TerrainSmokeProbe {
     private static BlockMaterials loadMaterials() {
         try {
             var pack = new PackLoader().load(Path.of(PACK_FILE));
-            return BlockMaterials.load(LegacyPack.inspect(pack.id(), pack.files()), Map.of(), ShaderPreprocessor.environment());
+            var legacy = LegacyPack.inspect(pack.id(), pack.files());
+            TerrainPackCompileProbe.verify(legacy);
+            return BlockMaterials.load(legacy, Map.of(), ShaderPreprocessor.environment());
         } catch (IOException failure) {
             throw new IllegalStateException("Could not load terrain materials from " + PACK_FILE, failure);
         }

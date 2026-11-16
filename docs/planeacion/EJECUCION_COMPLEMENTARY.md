@@ -41,6 +41,10 @@ El traductor de pases de pantalla puede emitir varias salidas legacy de `gl_Frag
 
 Faltan el traductor de vértices del mundo, uniforms y samplers del pack, y la prueba de compilación de sus programas reales.
 
+La prueba del JAR también localiza y preprocesa el vertex shader y fragment shader reales de `gbuffers_terrain` del Overworld del ZIP de Chill. El traductor adapta los atributos legacy, asigna ubicaciones a las entradas y salidas entre etapas, declara los uniforms en std140, conserva los valores iniciales declarados y convierte la profundidad de clip a la convención del backend. Los dos programas compilaron y enlazaron en OpenGL y Vulkan, con las salidas `[0, 6, 4]`, 82 uniforms y 23 samplers declarados.
+
+El shader real se compila sin emitir llamadas de dibujo. Queda proveerle el formato de vértices completo y los datos y texturas activos en el cuadro. La verificación de píxeles sigue usando el shader de diagnóstico.
+
 ## Terreno real (E04, en curso)
 
 Un pase de prueba optativo vuelve a dibujar los chunks opacos que Minecraft preparó para el cuadro. Reutiliza las mallas, el atlas de bloques y el shader de vértices de Minecraft. Escribe en dos texturas de color y una de profundidad con un fragmento de diagnóstico. La lectura GPU verifica la cobertura coincidente en los dos adjuntos. Se probó el JAR con un mundo local en OpenGL y Vulkan en la RTX 5060 Ti.
