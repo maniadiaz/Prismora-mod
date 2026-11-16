@@ -13,6 +13,8 @@ import com.prismora.render.runtime.GpuProgram;
 import com.prismora.render.runtime.GpuTargets;
 import com.prismora.render.runtime.MrtPass;
 import com.prismora.render.runtime.TerrainVertexData;
+import com.prismora.render.runtime.ShadowDepthSampling;
+import com.prismora.render.runtime.TerrainShadowFrame;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 
@@ -65,7 +67,7 @@ final class TerrainIndexedSmokeProbe {
                 gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
             }
             """;
-    private static final String CHECK_FRAGMENT = HEADER + """
+    private static final String CHECK_FRAGMENT = HEADER + ShadowDepthSampling.GLSL + """
             uniform sampler2D Color;
             uniform sampler2D Material;
             uniform sampler2D NormalData;
@@ -80,6 +82,13 @@ final class TerrainIndexedSmokeProbe {
                 bool hit = c.a > 0.5;
                 bool equalCoverage = hit == (m.a > 0.5) && hit == (n.a > 0.5) && hit == (z > 0.0);
                 bool valid = equalCoverage && (!hit || (abs(length(n.xyz) - 1.0) < 0.001 && m.r >= -1.0 && z <= 1.0));
+                if (hit) {
+                    vec2 uv = (vec2(pixel) + 0.5) / vec2(textureSize(Depth,0));
+                    float legacy = 1.0 - z;
+                    float visible = prismoraShadow2D(Depth, vec3(uv,legacy-0.01)).r;
+                    float occluded = prismoraShadow2D(Depth, vec3(uv,legacy+0.01)).r;
+                    valid = valid && visible > 0.99 && occluded < 0.01;
+                }
                 witness = valid ? vec4(0.0, hit ? 1.0 : 0.0, 0.0, 1.0) : vec4(1.0, 0.0, 0.0, 1.0);
             }
             """;
@@ -87,6 +96,15 @@ final class TerrainIndexedSmokeProbe {
     private TerrainIndexedSmokeProbe() {}
 
     static void submit(GpuBuffer vertices, int faceCount, Matrix4fc clipFromSection, Runnable completed) {
+        submit(vertices, faceCount, clipFromSection, null, completed);
+    }
+
+    static void submitShadow(GpuBuffer vertices, int faceCount, TerrainShadowFrame light, Runnable completed) {
+        boolean zeroToOne = RenderSystem.getDevice().getDeviceInfo().isZZeroToOne();
+        submit(vertices, faceCount, light.clipFromSection(zeroToOne), light.body(), completed);
+    }
+
+    private static void submit(GpuBuffer vertices, int faceCount, Matrix4fc clipFromSection, TerrainShadowFrame.Body body, Runnable completed) {
         var device = RenderSystem.getDevice();
         var format = GpuFormat.RGBA32_FLOAT;
         var spec = new GpuTargets.Spec(format, 1, 1, false, 0, 0, 0, 0);
@@ -144,8 +162,13 @@ final class TerrainIndexedSmokeProbe {
                 if (covered < 16) {
                     throw new IllegalStateException("Indexed terrain geometry did not cover enough pixels: " + covered);
                 }
-                Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_CAMERA_PASS: {} faces submitted, {} pixels with matching color, material, normal and depth",
-                        faceCount, covered);
+                if (body == null) {
+                    Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_CAMERA_PASS: {} faces submitted, {} pixels with matching color, material, normal and depth",
+                            faceCount, covered);
+                } else {
+                    Prismora.LOGGER.info("PRISMORA_WORLD_SHADOW_GEOMETRY_PASS: {} light, {} real faces submitted, {} covered texels with matching light and occlusion comparisons",
+                            body, faceCount, covered);
+                }
                 completed.run();
             }, 0);
             encoder.submit();

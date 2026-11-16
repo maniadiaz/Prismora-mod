@@ -8,6 +8,7 @@ import com.mojang.renderpearl.api.textures.GpuTexture;
 import com.prismora.Prismora;
 import com.prismora.render.runtime.GpuProgram;
 import com.prismora.render.runtime.TerrainVertexData;
+import com.prismora.render.runtime.TerrainShadowFrame;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
@@ -78,9 +79,9 @@ final class TerrainVertexSmokeProbe {
 
     private TerrainVertexSmokeProbe() {}
 
-    static void submit(List<TerrainVertexData> faces, org.joml.Matrix4fc clipFromSection, Runnable completed) {
+    static void submit(List<TerrainVertexData> faces, org.joml.Matrix4fc clipFromSection, TerrainShadowFrame light, Runnable completed) {
         var device = RenderSystem.getDevice();
-        var remaining = new java.util.concurrent.atomic.AtomicInteger(2);
+        var remaining = new java.util.concurrent.atomic.AtomicInteger(3);
         Runnable resultReady = () -> {
             if (remaining.decrementAndGet() == 0) {
                 completed.run();
@@ -136,6 +137,7 @@ final class TerrainVertexSmokeProbe {
                 }
                 encoder.submit();
                 TerrainIndexedSmokeProbe.submit(buffer, faces.size(), clipFromSection, resultReady);
+                TerrainIndexedSmokeProbe.submitShadow(buffer, faces.size(), light, resultReady);
             } finally {
                 for (int i = 0; i < PLANES; i++) {
                     if (views[i] != null) views[i].close();

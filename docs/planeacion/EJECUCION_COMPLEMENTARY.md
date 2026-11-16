@@ -79,7 +79,9 @@ El mismo bloque std140 se probó con la resolución, relación de aspecto, rango
 
 El JAR tradujo y enlazó los archivos `world0/shadow.vsh` y `world0/shadow.fsh` de Complementary r5.9.3 con las dos salidas [0, 1] en OpenGL y Vulkan. El traductor adapta `ftransform()` y la comparación de profundidad de `shadow2D`. RenderPearl permite leer la profundidad con un sampler regular, así que la comparación legacy se reproduce con cuatro texels y filtrado bilineal. La prueba cuantitativa verificó los resultados iluminado (1), ocluido (0) y filtrado (0.5) desde una textura D32 en ambos backends.
 
-El resultado GPU se obtuvo con profundidades sintéticas. Falta generar las matrices de luz, dibujar los bloques y demás objetos del mundo con `shadow` y entregar sus mapas al terreno de Complementary.
+Un ensayo posterior calcula una vista ortográfica local con los ángulos de sol y luna del cielo de Minecraft. Dibuja las caras indexadas de una sección con el atlas y escribe profundidad desde la luz. Al volver a muestrear el mapa, se verificaron 2 207 texeles de OpenGL y 1 527 de Vulkan con luz solar. Las pruebas automatizadas cubren la selección del sol y la luna y el orden de profundidad en las dos convenciones de clip.
+
+El mapa de una sección se genera con GLSL de diagnóstico. Falta ejecutar el shader real del pack, cubrir los objetos fuera de la cámara y conectar los mapas resultantes a gbuffers_terrain.
 
 ## Hallazgo para E10
 
