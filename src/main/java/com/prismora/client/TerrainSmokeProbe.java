@@ -20,6 +20,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -85,13 +87,16 @@ public final class TerrainSmokeProbe {
     private static volatile boolean shadowsVerified;
     private static TerrainPackCompileProbe.Programs packPrograms;
     private record SectionMesh(SectionPos section, List<TerrainVertexData> faces) {}
-    private static final Map<SectionPos, List<TerrainVertexData>> captured = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<SectionPos, List<TerrainVertexData>> captured = new ConcurrentHashMap<>();
+    private static Map<SectionPos, List<TerrainVertexData>> previewSections = Map.of();
+    private static int meshUpdates;
     private static SectionMesh previewScene;
 
     private static final ThreadLocal<SectionMesh> building = new ThreadLocal<>();
     private static final SectionPos PRESENT_SECTION = SectionPos.of(-33, 4, 4);
     private static final List<Integer> PREVIEW_YAW = List.of(0, 14, 28);
-    private static final List<SectionPos> PREVIEW_SECTIONS = List.of(PRESENT_SECTION, SectionPos.of(-34, 4, 4));
+    private static final int PREVIEW_RADIUS = 1;
+    private static final List<Double> PREVIEW_X = List.of(-526.5, -528.5, -530.5);
     private static final String PACK_FILE = System.getProperty("prismora.terrainPack", "");
 
     private TerrainSmokeProbe() {}
@@ -141,22 +146,24 @@ public final class TerrainSmokeProbe {
                 client.levelRenderer.invalidateCompiledGeometry(client.level, client.options, client.gameRenderer.mainCamera(), client.getBlockColors());
             }
         }
-        if (previewScene == null && captured.keySet().containsAll(PREVIEW_SECTIONS)) {
-            previewScene = mergePreviewSections();
+        if (!vertexSubmitted && captureStarted && worldTicks > 40) {
+            var visible = visibleTerrain(client);
+            if (visible.size() >= 2) {
+                updatePreviewMesh(visible);
+            }
         }
         var sample = previewScene;
         if (worldTicks > 40 && sample != null && cameraFrame != null && !vertexSubmitted) {
             vertexSubmitted = true;
             var frame = cameraFrame;
             var sky = client.gameRenderer.gameRenderState().levelRenderState.skyRenderState;
-            var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle, new org.joml.Vector3f(0, 8, 8), 24f);
-            previewMesh = TerrainVertexSmokeProbe.upload(sample.faces());
+            var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle, new org.joml.Vector3f(8, 8, 8), 40f);
             TerrainVertexSmokeProbe.submit(previewMesh, sample.faces(), frame, sample.section(), light, packPrograms, () -> vertexVerified = true);
             TerrainUniformSmokeProbe.submit(packPrograms.terrain(), frame, sample.section(), () -> uniformsVerified = true);
             ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
         }
         if (vertexVerified && ComplementaryPresentProbe.verified()) {
-            advancePreview(client, sample);
+            advancePreview(client);
         }
         if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified && shadowsVerified && ComplementaryPresentProbe.verified() && ComplementaryPresentProbe.generation() == PREVIEW_YAW.size() && poseVerified))) {
             if (materials != null) {
@@ -166,7 +173,9 @@ public final class TerrainSmokeProbe {
             }
             if (!PACK_FILE.isEmpty()) {
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_MULTISECTION_PASS: {} sections, {} faces submitted together",
-                        PREVIEW_SECTIONS.size(), sample.faces().size());
+                        previewSections.size(), previewScene.faces().size());
+                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_VISIBLE_TERRAIN_PASS: {} poses crossed a section boundary; {} visible mesh uploads",
+                        PREVIEW_X.size(), meshUpdates);
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_LIVE_SEQUENCE_PASS: {} poses presented with {} reused real pipelines",
                         PREVIEW_YAW.size(), ComplementaryPreviewPipelines.size());
             }
@@ -185,25 +194,32 @@ public final class TerrainSmokeProbe {
         }
     }
 
-    private static void advancePreview(Minecraft client, SectionMesh sample) {
+    private static void advancePreview(Minecraft client) {
         int presented = ComplementaryPresentProbe.generation();
         if (presented < PREVIEW_YAW.size() && requestedPose < presented && (presented == 1 || poseVerified)) {
             requestedPose = presented;
             poseRendering = false;
             poseVerified = false;
-            client.player.connection.sendCommand("tp @s -526.5 76 70.5 " + PREVIEW_YAW.get(requestedPose) + " 75");
+            client.player.connection.sendCommand("tp @s " + PREVIEW_X.get(requestedPose) + " 76 70.5 " + PREVIEW_YAW.get(requestedPose) + " 75");
             return;
         }
         if (requestedPose == 0 || poseRendering) {
             return;
         }
         var state = client.gameRenderer.gameRenderState().levelRenderState;
-        if (Math.abs(state.cameraRenderState.yRot - PREVIEW_YAW.get(requestedPose)) > 0.05f) {
+        if (Math.abs(state.cameraRenderState.yRot - PREVIEW_YAW.get(requestedPose)) > 0.05f
+                || Math.abs(cameraFrame.position().x - PREVIEW_X.get(requestedPose)) > 0.1) {
             return;
         }
+        var visible = visibleTerrain(client);
+        if (visible.size() < 2) {
+            return;
+        }
+        updatePreviewMesh(visible);
+        var sample = previewScene;
         poseRendering = true;
         var sky = state.skyRenderState;
-        var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle, new org.joml.Vector3f(0, 8, 8), 24f);
+        var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle, new org.joml.Vector3f(8, 8, 8), 40f);
         ComplementaryShadowSmokeProbe.submit(packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
                 sample.section(), packPrograms.terrain(), packPrograms.post(), () -> poseVerified = true);
     }
@@ -215,20 +231,47 @@ public final class TerrainSmokeProbe {
         }
     }
 
-    private static SectionMesh mergePreviewSections() {
+    private static Map<SectionPos, List<TerrainVertexData>> visibleTerrain(Minecraft client) {
+        var visible = new LinkedHashMap<SectionPos, List<TerrainVertexData>>();
+        for (var renderSection : client.levelRenderer.visibleSections()) {
+            var section = SectionPos.of(renderSection.getSectionNode());
+            var faces = captured.get(section);
+            if (faces != null && !faces.isEmpty()) {
+                visible.put(section, faces);
+            }
+        }
+        return visible;
+    }
+
+    private static void updatePreviewMesh(Map<SectionPos, List<TerrainVertexData>> visible) {
+        if (visible.equals(previewSections)) {
+            return;
+        }
         var anchor = PRESENT_SECTION.origin();
         var faces = new ArrayList<TerrainVertexData>();
-        for (var section : PREVIEW_SECTIONS) {
-            var origin = section.origin();
-            for (var face : captured.get(section)) {
+        for (var entry : visible.entrySet()) {
+            var origin = entry.getKey().origin();
+            for (var face : entry.getValue()) {
                 faces.add(face.offset(origin.getX() - anchor.getX(), origin.getY() - anchor.getY(), origin.getZ() - anchor.getZ()));
             }
         }
-        return new SectionMesh(PRESENT_SECTION, List.copyOf(faces));
+        var replacement = TerrainVertexSmokeProbe.upload(faces);
+        if (previewMesh != null) {
+            previewMesh.close();
+        }
+        previewMesh = replacement;
+        previewScene = new SectionMesh(PRESENT_SECTION, List.copyOf(faces));
+        previewSections = visible;
+        meshUpdates++;
     }
 
+    private static boolean insidePreview(SectionPos section) {
+        return Math.abs(section.x() - PRESENT_SECTION.x()) <= PREVIEW_RADIUS
+                && Math.abs(section.y() - PRESENT_SECTION.y()) <= PREVIEW_RADIUS
+                && Math.abs(section.z() - PRESENT_SECTION.z()) <= PREVIEW_RADIUS;
+    }
     public static void beginSection(SectionPos section) {
-        if (captureStarted && materials != null && PREVIEW_SECTIONS.contains(section) && !captured.containsKey(section)) {
+        if (captureStarted && materials != null && insidePreview(section)) {
             building.set(new SectionMesh(section, new ArrayList<>()));
         }
     }
@@ -243,7 +286,7 @@ public final class TerrainSmokeProbe {
             return;
         }
         building.remove();
-        if (!result.faces().isEmpty() && captured.putIfAbsent(result.section(), List.copyOf(result.faces())) == null) {
+        if (captured.put(result.section(), List.copyOf(result.faces())) == null && !result.faces().isEmpty()) {
             Prismora.LOGGER.info("Prismora camera terrain section {} captured with {} faces", result.section(), result.faces().size());
         }
     }
