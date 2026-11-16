@@ -25,8 +25,9 @@ final class ComplementaryTerrainDrawProbe {
     static void submit(ComplementaryFrameResources resources, TerrainShaderTranslator.Program shader, ByteBuffer payload, GpuBuffer vertices, int indicesCount,
                        GpuTextureView atlas, GpuTextureView noise, GpuSampler repeat, GpuTextureView shadowDepth,
                        GpuTextureView shadowOpaqueDepth, GpuTextureView shadowColor, GpuTextureView shadowShaftColor, List<ComplementaryPostCompileProbe.Pass> post, ComplementaryPostCompileProbe.Pass sky,
+                       ComplementaryTranslucentPass.Program translucent, ComplementaryTranslucentPass.Geometry geometry, GpuTextureView cloud,
                        TerrainCameraFrame camera, TerrainSceneUniforms scene, TerrainShadowFrame light, net.minecraft.core.SectionPos section, Runnable completed) {
-        var pending = new java.util.concurrent.atomic.AtomicInteger(2);
+        var pending = new java.util.concurrent.atomic.AtomicInteger(3);
         Runnable verified = () -> { if (pending.decrementAndGet() == 0) completed.run(); };
         var device = RenderSystem.getDevice();
         var nearest = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
@@ -91,9 +92,7 @@ final class ComplementaryTerrainDrawProbe {
                     }
                     pass.drawIndexed(indicesCount, 1, 0, 0, 0);
                 }
-                ComplementaryPostDrawProbe.submit(resources, post, targets, sceneDepth, noise, repeat, camera, scene, light, section,
-                        Map.of("shadowtex0", shadowDepth, "shadowtex1", shadowOpaqueDepth,
-                                "shadowcolor0", shadowColor, "shadowcolor1", shadowShaftColor), verified);
+
                 MrtPass.draw(device, witness, List.of(outputView), witnessInputs, nearest);
                 var readEncoder = device.createCommandEncoder();
                 readEncoder.copyTextureToBuffer(output, readback, witnessBytes, () -> {
@@ -121,6 +120,28 @@ final class ComplementaryTerrainDrawProbe {
                     verified.run();
                 }, 0);
                 readEncoder.submit();
+                depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
+                var opaqueDepth = depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
+                var materialCopy = targets.read(6);
+                device.createCommandEncoder().copyTextureToTexture(targets.write(6).texture(), materialCopy.texture(),
+                        0, 0, 0, 0, 0, width, height);
+                var shadowTextures = Map.of("shadowtex0", shadowDepth, "shadowtex1", shadowOpaqueDepth,
+                        "shadowcolor0", shadowColor, "shadowcolor1", shadowShaftColor);
+                var translucencyInputs = new java.util.HashMap<>(shadowTextures);
+                translucencyInputs.putAll(Map.of("tex", atlas, "noisetex", noise, "gaux4", cloud,
+                        "specular", specularView, "normals", specularView, "colortex6", materialCopy));
+                var translucencyMeasured = new java.util.concurrent.atomic.AtomicBoolean();
+                ComplementaryPostDrawProbe.submit(resources, post, targets, sceneDepth, opaqueDepth, noise, repeat,
+                        camera, scene, light, section, shadowTextures, attachments -> {
+                            translucencyInputs.put("depthtex1", attachments.get("depthtex1"));
+                            translucencyInputs.put("gaux2", attachments.get("colortex5"));
+                            ComplementaryTranslucentPass.draw(translucent, geometry,
+                                    slot -> attachments.get("colortex" + slot), sceneDepth, translucencyInputs,
+                                    repeat, camera, scene, light, section);
+                            if (translucencyMeasured.compareAndSet(false, true)) {
+                                ComplementaryTranslucentPass.verifyDepth(sceneDepth, opaqueDepth, verified);
+                            }
+                        }, verified);
             }
         } catch (RuntimeException failure) {
             readback.close();

@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Extended vertex data for a block model face. */
-public record TerrainVertexData(int materialId, TerrainQuadAttributes attributes, List<Corner> corners) {
+public record TerrainVertexData(int materialId, TerrainQuadAttributes attributes, List<Corner> corners, boolean translucent) {
     public static final VertexFormat FORMAT = VertexFormat.builder(0)
             .addAttribute("Position", GpuFormat.RGB32_FLOAT)
             .addAttribute("UV0", GpuFormat.RG32_FLOAT)
@@ -32,7 +32,15 @@ public record TerrainVertexData(int materialId, TerrainQuadAttributes attributes
         }
     }
 
-    public static TerrainVertexData from(int materialId, float x, float y, float z, BakedQuad quad, QuadInstance instance) {
+    public static TerrainVertexData fluid(int materialId, List<Corner> corners) {
+        var points = corners.stream().map(point -> new org.joml.Vector3f(point.x(), point.y(), point.z())).toList();
+        var uv = corners.stream().mapToLong(point -> UVPair.pack(point.u(), point.v())).toArray();
+        var attributes = TerrainQuadAttributes.calculate(points.get(0), points.get(1), points.get(2), points.get(3),
+                uv[0], uv[1], uv[2], uv[3]);
+        return new TerrainVertexData(materialId, attributes, corners, true);
+    }
+
+    public static TerrainVertexData from(int materialId, float x, float y, float z, BakedQuad quad, QuadInstance instance, boolean translucent) {
         var corners = new ArrayList<Corner>(4);
         for (int index = 0; index < 4; index++) {
             var position = quad.position(index);
@@ -40,14 +48,14 @@ public record TerrainVertexData(int materialId, TerrainQuadAttributes attributes
             corners.add(new Corner(x + position.x(), y + position.y(), z + position.z(), UVPair.unpackU(uv), UVPair.unpackV(uv), instance.getColor(index),
                     instance.getLightCoordsWithEmission(index, quad.materialInfo().lightEmission())));
         }
-        return new TerrainVertexData(materialId, TerrainQuadAttributes.from(quad), corners);
+        return new TerrainVertexData(materialId, TerrainQuadAttributes.from(quad), corners, translucent);
     }
 
     public TerrainVertexData offset(float x, float y, float z) {
         return new TerrainVertexData(materialId, attributes, corners.stream()
                 .map(corner -> new Corner(corner.x() + x, corner.y() + y, corner.z() + z,
                         corner.u(), corner.v(), corner.argb(), corner.light()))
-                .toList());
+                .toList(), translucent);
     }
 
     public void writeVertex(ByteBuffer buffer, int index) {

@@ -108,3 +108,7 @@ Las fuentes de la plataforma fijada exponen únicamente VERTEX y FRAGMENT en `co
 El diagnóstico del Overworld ejecuta el programa real gbuffers_skybasic de Complementary Reimagined r5.9.3 antes de dibujar el terreno. El programa escribe el fondo en colortex0 sin tocar la profundidad y recibe la proyección, la orientación de la cámara y los valores de escena. La lectura de GPU se hace antes de la pasada opaca para comprobar la cobertura del cielo aunque el terreno ocupe toda la vista. La prueba también vuelve a ejecutar el cielo después de redimensionar los adjuntos.
 
 Quedan por integrar el pase de sol y luna texturizados y la geometría de precipitación. Falta una prueba visual específica de nubes, niebla y cambios de clima.
+
+## Etapa 2.2. Agua y transparencias
+
+El diagnóstico del Overworld captura la geometría real del agua y clasifica los modelos según la capa de Minecraft. Las caras translúcidas se ordenan por profundidad en vista y se dibujan con el gbuffers_water real del pack entre deferred y composite. Se conserva una copia de la profundidad opaca en depthtex1 y se entrega la profundidad de la escena con transparencias en depthtex0. El ensayo exige caras de agua y vidrio teñido y comprueba en GPU que las transparencias delante de la superficie opaca escriben profundidad sin sustituir una superficie opaca más cercana.

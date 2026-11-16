@@ -22,6 +22,10 @@ public final class GpuProgram implements AutoCloseable {
  public static GpuProgram withVertices(GpuDevice device,String name,String vertex,String fragment,List<GpuFormat> formats,VertexFormat vertexFormat,PrimitiveTopology topology,Collection<String> samplers,DepthStencilState depth,Collection<String> uniformBlocks){
   return new GpuProgram(device,name,vertex,fragment,formats.stream().map(format->new ColorTargetState(Optional.empty(),format,ColorTargetState.WRITE_ALL)).toList(),samplers,Optional.ofNullable(depth),vertexFormat,topology,uniformBlocks);
  }
+ public static GpuProgram withVertexTargets(GpuDevice device,String name,String vertex,String fragment,List<ColorTargetState> targets,VertexFormat format,
+                                            Collection<String> samplers,DepthStencilState depth,Collection<String> uniformBlocks){
+  return new GpuProgram(device,name,vertex,fragment,targets,samplers,Optional.of(depth),format,PrimitiveTopology.QUADS,uniformBlocks);
+ }
  private GpuProgram(GpuDevice device,String name,String vertex,String fragment,List<ColorTargetState> descriptions,Collection<String> samplers,Optional<DepthStencilState> depth,VertexFormat vertexFormat,PrimitiveTopology topology,Collection<String> uniformBlocks){
   var states=List.copyOf(descriptions);
   if(states.isEmpty()||states.size()>Math.min(8,device.getDeviceInfo().limits().maxColorAttachments()))throw new IllegalArgumentException("Unsupported simultaneous color target count");

@@ -101,7 +101,10 @@ public final class TerrainSmokeProbe {
     private static TerrainSectionGeometry editedMesh;
     private static List<TerrainVertexData> facesBeforeEdit;
     private static SectionMesh previewScene;
+    private static List<TerrainVertexData> translucentFaces = List.of();
 
+    private record FluidCapture(int material, List<TerrainVertexData.Corner> corners) {}
+    private static final ThreadLocal<FluidCapture> fluidCapture = new ThreadLocal<>();
     private static final ThreadLocal<List<TerrainVertexData>> building = new ThreadLocal<>();
     private static final SectionPos PRESENT_SECTION = SectionPos.of(-33, 4, 4);
     private static final List<Integer> PREVIEW_YAW = List.of(0, 14, 28);
@@ -162,6 +165,8 @@ public final class TerrainSmokeProbe {
                 client.player.connection.sendCommand("time set 6000");
                 client.player.connection.sendCommand("gamerule minecraft:advance_time false");
                 client.player.connection.sendCommand("weather clear");
+                client.player.connection.sendCommand("setblock -527 74 71 minecraft:water");
+                client.player.connection.sendCommand("setblock -526 74 71 minecraft:cyan_stained_glass");
 
             }
         }
@@ -253,6 +258,17 @@ public final class TerrainSmokeProbe {
         if (requestedPose == 2 && (target.width != 800 || target.height != 450)) {
             return;
         }
+        if (requestedPose == 0) {
+            int water = materialId(Blocks.WATER.defaultBlockState());
+            int glass = materialId(client.level.getBlockState(new BlockPos(-526, 74, 71)));
+            long waterFaces = translucentFaces.stream().filter(face -> face.materialId() == water).count();
+            long glassFaces = translucentFaces.stream().filter(face -> face.materialId() == glass).count();
+            if (water != 32000 || glass != 31018 || waterFaces == 0 || glassFaces == 0) {
+                return;
+            }
+            Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TRANSLUCENT_MATERIALS_PASS: {} water and {} stained-glass faces",
+                    waterFaces, glassFaces);
+        }
         var resources = ComplementaryFrameResources.forTarget(target);
         var sample = previewScene;
         poseRendering = true;
@@ -266,8 +282,15 @@ public final class TerrainSmokeProbe {
             TerrainUniformSmokeProbe.submit(packPrograms.terrain(), cameraFrame, sample.section(), () -> uniformsVerified = true);
             ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
         }
-        ComplementaryShadowSmokeProbe.submit(resources, packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
-                sample.section(), packPrograms.terrain(), packPrograms.post(), packPrograms.sky(), () -> poseVerified = true);
+        var sorted = new ArrayList<>(translucentFaces);
+        var view = cameraFrame.modelViewFromSection(sample.section());
+        sorted.sort(java.util.Comparator.comparingDouble(face -> translucentDepth(face, view)));
+        try (var buffer = sorted.isEmpty() ? null : TerrainVertexSmokeProbe.upload(sorted)) {
+            var geometry = buffer == null ? null : new ComplementaryTranslucentPass.Geometry(buffer, sorted.size() * 6);
+            ComplementaryShadowSmokeProbe.submit(resources, packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
+                    sample.section(), packPrograms.terrain(), packPrograms.post(), packPrograms.sky(),
+                    packPrograms.translucent(), geometry, () -> poseVerified = true);
+        }
         if (requestedPose == 0) {
             firstFrameResources = resources;
             firstResourceCount = resources.size();
@@ -288,6 +311,14 @@ public final class TerrainSmokeProbe {
         }
         Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_WORLD_FRAME_PASS: pose {} submitted shadow, terrain and post from renderLevel", requestedPose + 1);
     }
+    private static double translucentDepth(TerrainVertexData face, Matrix4fc view) {
+        double depth = 0;
+        for (var corner : face.corners()) {
+            depth += view.m02() * corner.x() + view.m12() * corner.y() + view.m22() * corner.z();
+        }
+        return depth;
+    }
+
     public static void captureCamera(Matrix4fc projection) {
         if (materials != null) {
             var state = Minecraft.getInstance().gameRenderer.gameRenderState().levelRenderState.cameraRenderState;
@@ -390,10 +421,12 @@ public final class TerrainSmokeProbe {
         }
         var anchor = PRESENT_SECTION.origin();
         var faces = new ArrayList<TerrainVertexData>();
+        var translucent = new ArrayList<TerrainVertexData>();
         for (var entry : visible.entrySet()) {
             var origin = entry.getKey().origin();
             for (var face : entry.getValue()) {
-                faces.add(face.offset(origin.getX() - anchor.getX(), origin.getY() - anchor.getY(), origin.getZ() - anchor.getZ()));
+                var destination = face.translucent() ? translucent : faces;
+                destination.add(face.offset(origin.getX() - anchor.getX(), origin.getY() - anchor.getY(), origin.getZ() - anchor.getZ()));
             }
         }
         var replacement = faces.isEmpty() ? null : TerrainVertexSmokeProbe.upload(faces);
@@ -401,6 +434,7 @@ public final class TerrainSmokeProbe {
             previewMesh.close();
         }
         previewMesh = replacement;
+        translucentFaces = List.copyOf(translucent);
         previewScene = new SectionMesh(PRESENT_SECTION, List.copyOf(faces));
         previewSections = visible;
         meshUpdates++;
@@ -428,18 +462,39 @@ public final class TerrainSmokeProbe {
         return materials.id(state);
     }
 
-    public static void recordMaterial(int id, float x, float y, float z, BakedQuad quad, QuadInstance instance) {
+    public static void recordMaterial(int id, float x, float y, float z, BakedQuad quad, QuadInstance instance, boolean translucent) {
         var faces = building.get();
         if (faces.size() >= 65_536) {
             throw new IllegalStateException("Section exceeds the terrain probe's face budget");
         }
-        var face = TerrainVertexData.from(id, x, y, z, quad, instance);
+        var face = TerrainVertexData.from(id, x, y, z, quad, instance, translucent);
         var attrs = face.attributes();
         float dot = attrs.nx() * attrs.tx() + attrs.ny() * attrs.ty() + attrs.nz() * attrs.tz();
         if (!(Math.abs(dot) < 0.0001f && Float.isFinite(attrs.midU()) && Float.isFinite(attrs.midV()))) {
             throw new IllegalStateException("Invalid terrain quad attributes: " + attrs);
         }
         faces.add(face);
+    }
+
+    public static void beginWater() {
+        fluidCapture.set(new FluidCapture(materialId(Blocks.WATER.defaultBlockState()), new ArrayList<>(4)));
+    }
+
+    public static void endWater() {
+        fluidCapture.remove();
+    }
+
+    public static void recordWaterVertex(float x, float y, float z, int color, float u, float v, int light) {
+        var fluid = fluidCapture.get();
+        if (fluid == null) {
+            return;
+        }
+        var corners = fluid.corners();
+        corners.add(new TerrainVertexData.Corner(x, y, z, u, v, color, light));
+        if (corners.size() == 4) {
+            building.get().add(TerrainVertexData.fluid(fluid.material(), corners));
+            corners.clear();
+        }
     }
 
     private static BlockMaterials loadMaterials() {

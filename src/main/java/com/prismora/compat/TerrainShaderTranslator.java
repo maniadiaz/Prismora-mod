@@ -57,7 +57,8 @@ public final class TerrainShaderTranslator {
     private Program translate(ShaderPreprocessor.Result vertex, ShaderPreprocessor.Result fragment, boolean zeroToOne, boolean screen) throws IOException {
         var uniforms = new LinkedHashMap<String, String>();
         uniforms.put("prismoraTextureMatrix", "mat4[2]");
-        if (screen) uniforms.put("prismoraFogParams", "vec4");
+        boolean usesLegacyFog = screen || fragment.source().contains("gl_Fog.");
+        if (usesLegacyFog) uniforms.put("prismoraFogParams", "vec4");
         uniforms.put("prismoraProjection", "mat4");
         uniforms.put("prismoraModelView", "mat4");
         uniforms.put("prismoraNormalMatrix", "mat3");
@@ -67,7 +68,7 @@ public final class TerrainShaderTranslator {
         var slots = DrawBuffers.parse(fragment);
         var vs = stage(vertex.source(), true, uniforms, defaults, samplers, varyings);
         var fs = stage(fragment.source(), false, uniforms, defaults, samplers, varyings);
-        if (screen) fs = legacyFog(fs);
+        if (usesLegacyFog) fs = legacyFog(fs);
         String block = new TerrainUniformLayout(uniforms).declaration(UNIFORM_BLOCK);
 
         String vertexInputs = screen ? """
