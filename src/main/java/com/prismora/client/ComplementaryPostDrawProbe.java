@@ -81,14 +81,17 @@ final class ComplementaryPostDrawProbe {
             for (int frame = 0; frame < 2; frame++) {
                 buffers.clear(false);
                 var restoreMaterial = device.createCommandEncoder();
-                restoreMaterial.copyTextureToTexture(terrain.read(6).texture(), terrain.write(6).texture(),
-                        0, 0, 0, 0, 0, width, height);
+                for (int slot : List.of(3, 6)) {
+                    restoreMaterial.copyTextureToTexture(terrain.read(slot).texture(), terrain.write(slot).texture(),
+                            0, 0, 0, 0, 0, width, height);
+                }
                 restoreMaterial.submit();
                 if (frame == 1) copyHistory(firstHistory, readback, 2L * frameBytes + historyBytes);
                 var available = new java.util.HashMap<String, GpuTextureView>(shadows);
                 specs.keySet().stream().filter(index -> index < 14)
                         .forEach(index -> available.put("colortex" + index, buffers.read(index)));
                 available.put("colortex0", terrain.write(0));
+                available.put("colortex3", terrain.write(3));
                 available.put("colortex4", terrain.write(4));
                 available.put("colortex6", terrain.write(6));
                 available.put("depthtex0", buffers.write(15));

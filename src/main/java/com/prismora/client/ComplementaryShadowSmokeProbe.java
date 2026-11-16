@@ -35,7 +35,9 @@ final class ComplementaryShadowSmokeProbe {
 
     static void submit(ComplementaryFrameResources resources, Inputs inputs, GpuBuffer vertices, int faceCount, TerrainShadowFrame light,
                        TerrainCameraFrame camera, SectionPos section, TerrainShaderTranslator.Program terrain, List<ComplementaryPostCompileProbe.Pass> post, ComplementaryPostCompileProbe.Pass sky,
-                       ComplementaryTranslucentPass.Program translucent, ComplementaryTranslucentPass.Geometry geometry, Runnable completed) {
+                       ComplementaryTranslucentPass.Program translucent, ComplementaryTranslucentPass.Geometry geometry,
+                       ComplementaryEntityPass.Program entities, ComplementaryEntityPass.Program particles, ComplementaryEntityPass.Program hand,
+                       List<ComplementaryFeatureCapture.Draw> features, Runnable completed) {
         var device = RenderSystem.getDevice();
         var client = Minecraft.getInstance();
         var shader = inputs.shader();
@@ -97,7 +99,8 @@ final class ComplementaryShadowSmokeProbe {
         terrainLayout.putFloat(terrainData, "sunAngle", sun - (float) Math.floor(sun));
         terrainLayout.putInt(terrainData, "entityId", 0);
 
-        var remaining = new java.util.concurrent.atomic.AtomicInteger(2);
+        var casters = features.stream().filter(feature -> feature.kind() == ComplementaryFeatureCapture.Kind.MODEL || feature.kind() == ComplementaryFeatureCapture.Kind.ITEM).toList();
+        var remaining = new java.util.concurrent.atomic.AtomicInteger(casters.isEmpty() ? 2 : 3);
         Runnable verified = () -> { if (remaining.decrementAndGet() == 0) completed.run(); };
         var color = new GpuTargets.Spec(TargetFormat.RGBA8, 1, 1, false, 0, 0, 0, 0);
         var readback = device.createBuffer(() -> "Complementary shadow witness", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ,
@@ -135,7 +138,7 @@ final class ComplementaryShadowSmokeProbe {
                         .withColorAttachment(targets.write(0)).withColorAttachment(targets.write(1)).withDepthAttachment(depthView).build();
                 int count = faceCount * 6;
                 var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
-                var indexBuffer = indices.getBuffer(count);
+                var indexBuffer = indices.getBuffer(Math.max(count, features.stream().mapToInt(ComplementaryFeatureCapture.Draw::indices).max().orElse(0)));
                 var encoder = device.createCommandEncoder();
                 try (var pass = encoder.createRenderPass(descriptor)) {
                     pass.setPipeline(program.compiled());
@@ -147,10 +150,28 @@ final class ComplementaryShadowSmokeProbe {
                     }
                     pass.drawIndexed(count, 1, 0, 0, 0);
                 }
+                if (!casters.isEmpty()) {
+                    depth.snapshot(GpuDepthTargets.Stage.BEFORE_HAND);
+                    try (var pass = device.createCommandEncoder().createRenderPass(descriptor)) {
+                        pass.setPipeline(program.compiled());
+                        pass.setIndexBuffer(indexBuffer, indices.type());
+                        pass.setUniform(TerrainShaderTranslator.UNIFORM_BLOCK, uniforms);
+                        for (var feature : casters) {
+                            for (String name : required) {
+                                var texture = name.equals("tex") ? feature.texture() : known.get(name);
+                                pass.setUniform(name, texture, name.equals("noisetex") || name.equals("gaux4") ? repeat : nearest);
+                            }
+                            pass.setVertexBuffer(0, feature.vertices().slice());
+                            pass.drawIndexed(feature.indices(), 1, 0, 0, 0);
+                        }
+                    }
+                    ComplementaryTranslucentPass.verifyDepth("ENTITIES_SHADOW", depthView,
+                            depth.view(GpuDepthTargets.Stage.BEFORE_HAND), verified);
+                }
                 depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
                 ComplementaryTerrainDrawProbe.submit(resources, terrain, terrainData, vertices, count, atlas, noise.getTextureView(), repeat,
                         depthView, depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY), targets.write(0), targets.write(1),
-                        post, sky, translucent, geometry, cloud.getTextureView(), camera, scene, light, section, verified);
+                        post, sky, translucent, geometry, cloud.getTextureView(), entities, particles, hand, features, camera, scene, light, section, verified);
                 MrtPass.draw(device, check, List.of(outputView), Map.of("ShadowDepth", depthView,
                         "ShadowColor0", targets.write(0), "ShadowColor1", targets.write(1)), nearest);
                 encoder.copyTextureToBuffer(output, readback, 0, () -> {

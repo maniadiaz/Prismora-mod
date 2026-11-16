@@ -135,7 +135,7 @@ final class ComplementaryTranslucentPass {
         Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TRANSLUCENT_DRAW_PASS: {} sorted faces", geometry.count() / 6);
     }
 
-    static void verifyDepth(GpuTextureView scene, GpuTextureView opaque, Runnable completed) {
+    static void verifyDepth(String label, GpuTextureView scene, GpuTextureView opaque, Runnable completed) {
         var device = RenderSystem.getDevice();
         int width = scene.getWidth(0), height = scene.getHeight(0);
         int bytes = Math.multiplyExact(Math.multiplyExact(width, height), 4);
@@ -168,7 +168,7 @@ final class ComplementaryTranslucentPass {
                 try (readback; var mapping = readback.map(true, false)) {
                     for (int index = 0; index < bytes; index += 4) {
                         if (mapping.data().get(index + 1) != 0) {
-                            throw new IllegalStateException("Translucency replaced nearer opaque depth");
+                            throw new IllegalStateException(label + " replaced nearer opaque depth");
                         }
                         if (mapping.data().get(index) != 0) {
                             closer++;
@@ -176,9 +176,9 @@ final class ComplementaryTranslucentPass {
                     }
                 }
                 if (closer == 0) {
-                    throw new IllegalStateException("No translucent faces drew in front of opaque terrain");
+                    throw new IllegalStateException(label + " did not write foreground depth");
                 }
-                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TRANSLUCENT_DEPTH_PASS: {} foreground pixels kept separate from opaque depth", closer);
+                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_{}_PASS: {} foreground pixels kept separate from opaque depth", label, closer);
                 completed.run();
             }, 0);
             encoder.submit();

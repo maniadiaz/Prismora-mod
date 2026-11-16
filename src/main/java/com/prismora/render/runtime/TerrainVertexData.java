@@ -32,12 +32,12 @@ public record TerrainVertexData(int materialId, TerrainQuadAttributes attributes
         }
     }
 
-    public static TerrainVertexData fluid(int materialId, List<Corner> corners) {
+    public static TerrainVertexData fromCorners(int materialId, List<Corner> corners, boolean translucent) {
         var points = corners.stream().map(point -> new org.joml.Vector3f(point.x(), point.y(), point.z())).toList();
         var uv = corners.stream().mapToLong(point -> UVPair.pack(point.u(), point.v())).toArray();
         var attributes = TerrainQuadAttributes.calculate(points.get(0), points.get(1), points.get(2), points.get(3),
                 uv[0], uv[1], uv[2], uv[3]);
-        return new TerrainVertexData(materialId, attributes, corners, true);
+        return new TerrainVertexData(materialId, attributes, corners, translucent);
     }
 
     public static TerrainVertexData from(int materialId, float x, float y, float z, BakedQuad quad, QuadInstance instance, boolean translucent) {

@@ -160,15 +160,21 @@ public final class TerrainSmokeProbe {
                 }
                 client.options.renderDistance().set(3);
                 client.getWindow().setWindowed(960, 540);
-                client.player.connection.sendCommand("gamemode spectator");
+                client.player.connection.sendCommand("gamemode creative");
                 client.player.connection.sendCommand("tp @s -526.5 76 70.5 0 75");
                 client.player.connection.sendCommand("time set 6000");
                 client.player.connection.sendCommand("gamerule minecraft:advance_time false");
                 client.player.connection.sendCommand("weather clear");
                 client.player.connection.sendCommand("setblock -527 74 71 minecraft:water");
                 client.player.connection.sendCommand("setblock -526 74 71 minecraft:cyan_stained_glass");
+                client.player.connection.sendCommand("summon minecraft:cow -526.5 73 72 {NoAI:1b,NoGravity:1b,Silent:1b}");
+                client.player.connection.sendCommand("summon minecraft:item -527 74 72 {Item:{id:\"minecraft:diamond\",count:1},NoGravity:1b,PickupDelay:32767s}");
 
             }
+        }
+        if (materials != null && client.player != null && client.player.getAbilities().mayfly && !client.player.getAbilities().flying) {
+            client.player.getAbilities().flying = true;
+            client.player.onUpdateAbilities();
         }
         if (materials != null && !captureStarted && worldTicks >= 25 && cameraFrame != null) {
             var position = cameraFrame.position();
@@ -176,6 +182,9 @@ public final class TerrainSmokeProbe {
                 captureStarted = true;
                 client.levelRenderer.invalidateCompiledGeometry(client.level, client.options, client.gameRenderer.mainCamera(), client.getBlockColors());
             }
+        }
+        if (captureStarted && worldTicks % 10 == 0 && editCheck == null) {
+            client.player.connection.sendCommand("particle minecraft:flame -526.5 74 72 0.4 0.3 0.4 0 32 force");
         }
         if (vertexVerified && ComplementaryPresentProbe.verified()) {
             advancePreview(client);
@@ -285,11 +294,14 @@ public final class TerrainSmokeProbe {
         var sorted = new ArrayList<>(translucentFaces);
         var view = cameraFrame.modelViewFromSection(sample.section());
         sorted.sort(java.util.Comparator.comparingDouble(face -> translucentDepth(face, view)));
+        var features = ComplementaryFeatureCapture.upload(cameraFrame.position(), sample.section());
         try (var buffer = sorted.isEmpty() ? null : TerrainVertexSmokeProbe.upload(sorted)) {
             var geometry = buffer == null ? null : new ComplementaryTranslucentPass.Geometry(buffer, sorted.size() * 6);
             ComplementaryShadowSmokeProbe.submit(resources, packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
                     sample.section(), packPrograms.terrain(), packPrograms.post(), packPrograms.sky(),
-                    packPrograms.translucent(), geometry, () -> poseVerified = true);
+                    packPrograms.translucent(), geometry, packPrograms.entities(), packPrograms.particles(), packPrograms.hand(), features, () -> poseVerified = true);
+        } finally {
+            features.forEach(ComplementaryFeatureCapture.Draw::close);
         }
         if (requestedPose == 0) {
             firstFrameResources = resources;
@@ -447,6 +459,10 @@ public final class TerrainSmokeProbe {
         }
     }
 
+    public static boolean capturingFeatures() {
+        return captureStarted && !finished;
+    }
+
     public static boolean capturingSection() {
         return building.get() != null;
     }
@@ -492,7 +508,7 @@ public final class TerrainSmokeProbe {
         var corners = fluid.corners();
         corners.add(new TerrainVertexData.Corner(x, y, z, u, v, color, light));
         if (corners.size() == 4) {
-            building.get().add(TerrainVertexData.fluid(fluid.material(), corners));
+            building.get().add(TerrainVertexData.fromCorners(fluid.material(), corners, true));
             corners.clear();
         }
     }

@@ -26,8 +26,14 @@ final class ComplementaryTerrainDrawProbe {
                        GpuTextureView atlas, GpuTextureView noise, GpuSampler repeat, GpuTextureView shadowDepth,
                        GpuTextureView shadowOpaqueDepth, GpuTextureView shadowColor, GpuTextureView shadowShaftColor, List<ComplementaryPostCompileProbe.Pass> post, ComplementaryPostCompileProbe.Pass sky,
                        ComplementaryTranslucentPass.Program translucent, ComplementaryTranslucentPass.Geometry geometry, GpuTextureView cloud,
+                       ComplementaryEntityPass.Program entities, ComplementaryEntityPass.Program particles, ComplementaryEntityPass.Program hand, List<ComplementaryFeatureCapture.Draw> features,
                        TerrainCameraFrame camera, TerrainSceneUniforms scene, TerrainShadowFrame light, net.minecraft.core.SectionPos section, Runnable completed) {
-        var pending = new java.util.concurrent.atomic.AtomicInteger(3);
+        var modelsAndItems = features.stream().filter(feature -> feature.kind() == ComplementaryFeatureCapture.Kind.MODEL
+                || feature.kind() == ComplementaryFeatureCapture.Kind.ITEM).toList();
+        var particleFaces = features.stream().filter(feature -> feature.kind() == ComplementaryFeatureCapture.Kind.PARTICLE).toList();
+        var handFaces = features.stream().filter(feature -> feature.kind() == ComplementaryFeatureCapture.Kind.HAND).toList();
+        int checks = 3 + (modelsAndItems.isEmpty() ? 0 : 1) + (handFaces.isEmpty() ? 0 : 1);
+        var pending = new java.util.concurrent.atomic.AtomicInteger(checks);
         Runnable verified = () -> { if (pending.decrementAndGet() == 0) completed.run(); };
         var device = RenderSystem.getDevice();
         var nearest = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
@@ -39,7 +45,13 @@ final class ComplementaryTerrainDrawProbe {
         var readback = device.createBuffer(() -> "Complementary terrain witness", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ, witnessBytes * 2);
         try {
             var targets = resources.get("terrain colors", GpuTargets.class,
-                    () -> new GpuTargets(device, Map.of(0, color, 6, material, 4, normal), width, height, 8L * 1024 * 1024));
+                    () -> {
+                        var specs = new java.util.HashMap<>(Map.of(0, color, 6, material, 4, normal));
+                        for (int slot : java.util.stream.Stream.concat(entities.slots().stream(), particles.slots().stream()).distinct().toList()) {
+                            specs.putIfAbsent(slot, new GpuTargets.Spec(ComplementaryPostCompileProbe.format(slot), 1, 1, false, 0, 0, 0, 0));
+                        }
+                        return new GpuTargets(device, specs, width, height, 8L * 1024 * 1024);
+                    });
             var depth = resources.get("terrain depth", GpuDepthTargets.class,
                     () -> new GpuDepthTargets(device, width, height, 8L * 1024 * 1024));
             var specular = resources.get("specular", GpuTexture.class, () -> {
@@ -120,17 +132,32 @@ final class ComplementaryTerrainDrawProbe {
                     verified.run();
                 }, 0);
                 readEncoder.submit();
+                var entityInputs = new java.util.HashMap<>(known);
+                entityInputs.put("normals", specularView);
+                depth.snapshot(GpuDepthTargets.Stage.BEFORE_HAND);
+                ComplementaryEntityPass.draw(entities, modelsAndItems, targets::write, sceneDepth, entityInputs, repeat, camera, scene, light, section);
+                if (!modelsAndItems.isEmpty()) {
+                    ComplementaryTranslucentPass.verifyDepth("ENTITIES_DEPTH", sceneDepth, depth.view(GpuDepthTargets.Stage.BEFORE_HAND), verified);
+                    long models = features.stream().filter(feature -> feature.kind() == ComplementaryFeatureCapture.Kind.MODEL).mapToLong(feature -> feature.indices() / 6).sum();
+                    long items = features.stream().filter(feature -> feature.kind() == ComplementaryFeatureCapture.Kind.ITEM).mapToLong(feature -> feature.indices() / 6).sum();
+                    Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_ENTITIES_DRAW_PASS: {} model and {} item faces submitted to scene and shadow", models, items);
+                }
                 depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
                 var opaqueDepth = depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
                 var materialCopy = targets.read(6);
-                device.createCommandEncoder().copyTextureToTexture(targets.write(6).texture(), materialCopy.texture(),
-                        0, 0, 0, 0, 0, width, height);
+                var snapshots = device.createCommandEncoder();
+                for (int slot : List.of(3, 6)) {
+                    snapshots.copyTextureToTexture(targets.write(slot).texture(), targets.read(slot).texture(),
+                            0, 0, 0, 0, 0, width, height);
+                }
+                snapshots.submit();
                 var shadowTextures = Map.of("shadowtex0", shadowDepth, "shadowtex1", shadowOpaqueDepth,
                         "shadowcolor0", shadowColor, "shadowcolor1", shadowShaftColor);
                 var translucencyInputs = new java.util.HashMap<>(shadowTextures);
                 translucencyInputs.putAll(Map.of("tex", atlas, "noisetex", noise, "gaux4", cloud,
                         "specular", specularView, "normals", specularView, "colortex6", materialCopy));
                 var translucencyMeasured = new java.util.concurrent.atomic.AtomicBoolean();
+                var handMeasured = new java.util.concurrent.atomic.AtomicBoolean();
                 ComplementaryPostDrawProbe.submit(resources, post, targets, sceneDepth, opaqueDepth, noise, repeat,
                         camera, scene, light, section, shadowTextures, attachments -> {
                             translucencyInputs.put("depthtex1", attachments.get("depthtex1"));
@@ -139,7 +166,28 @@ final class ComplementaryTerrainDrawProbe {
                                     slot -> attachments.get("colortex" + slot), sceneDepth, translucencyInputs,
                                     repeat, camera, scene, light, section);
                             if (translucencyMeasured.compareAndSet(false, true)) {
-                                ComplementaryTranslucentPass.verifyDepth(sceneDepth, opaqueDepth, verified);
+                                ComplementaryTranslucentPass.verifyDepth("TRANSLUCENT_DEPTH", sceneDepth, opaqueDepth, verified);
+                            }
+                            entityInputs.put("gaux2", attachments.get("colortex5"));
+                            ComplementaryEntityPass.draw(particles, particleFaces, slot -> attachments.get("colortex" + slot),
+                                    sceneDepth, entityInputs, repeat, camera, scene, light, section);
+                            if (!particleFaces.isEmpty()) {
+                                int count = particleFaces.stream().mapToInt(feature -> feature.indices() / 6).sum();
+                                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_PARTICLES_DRAW_PASS: {} textured particle quads", count);
+                            }
+                            boolean checkHand = !handFaces.isEmpty() && handMeasured.compareAndSet(false, true);
+                            if (checkHand) {
+                                depth.snapshot(GpuDepthTargets.Stage.BEFORE_HAND);
+                            }
+                            ComplementaryEntityPass.draw(hand, handFaces, slot -> attachments.get("colortex" + slot),
+                                    sceneDepth, entityInputs, repeat, camera, scene, light, section);
+                            if (checkHand) {
+                                ComplementaryTranslucentPass.verifyDepth("HAND_DEPTH", sceneDepth,
+                                        depth.view(GpuDepthTargets.Stage.BEFORE_HAND), verified);
+                            }
+                            if (!handFaces.isEmpty()) {
+                                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_HAND_DRAW_PASS: {} first-person faces",
+                                        handFaces.stream().mapToInt(feature -> feature.indices() / 6).sum());
                             }
                         }, verified);
             }

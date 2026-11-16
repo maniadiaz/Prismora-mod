@@ -19,7 +19,7 @@ import java.util.Map;
 final class TerrainPackCompileProbe {
     private TerrainPackCompileProbe() {}
 
-    record Programs(TerrainShaderTranslator.Program terrain, ComplementaryShadowSmokeProbe.Inputs shadow, List<ComplementaryPostCompileProbe.Pass> post, ComplementaryPostCompileProbe.Pass sky, ComplementaryTranslucentPass.Program translucent) {}
+    record Programs(TerrainShaderTranslator.Program terrain, ComplementaryShadowSmokeProbe.Inputs shadow, List<ComplementaryPostCompileProbe.Pass> post, ComplementaryPostCompileProbe.Pass sky, ComplementaryTranslucentPass.Program translucent, ComplementaryEntityPass.Program entities, ComplementaryEntityPass.Program particles, ComplementaryEntityPass.Program hand) {}
 
     static Programs verify(LegacyPack pack) throws IOException {
         var options = Map.<String, String>of();
@@ -44,7 +44,10 @@ final class TerrainPackCompileProbe {
             return new Programs(translated, verifyShadow(pack, options, environment, dimension),
                     ComplementaryPostCompileProbe.verify(pack, options, environment, dimension),
                     ComplementarySkyPass.load(pack, options, environment, dimension),
-                    ComplementaryTranslucentPass.load(pack, options, environment, dimension));
+                    ComplementaryTranslucentPass.load(pack, options, environment, dimension),
+                    ComplementaryEntityPass.load("gbuffers_entities", pack, options, environment, dimension),
+                    ComplementaryEntityPass.load("gbuffers_textured", pack, options, environment, dimension),
+                    ComplementaryEntityPass.load("gbuffers_hand", pack, options, environment, dimension));
         } catch (RuntimeException error) {
             Prismora.LOGGER.error("Terrain compiler source map: {}", translated.sourceFiles());
             throw error;
