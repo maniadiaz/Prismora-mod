@@ -29,7 +29,7 @@ final class ComplementaryShadowSmokeProbe {
     private static final int SIZE = 128;
     private static final long START = System.nanoTime();
     private static final String HEADER = "#version 330\n#extension GL_ARB_separate_shader_objects : require\n";
-    record Inputs(TerrainShaderTranslator.Program shader, byte[] noise, byte[] cloudWater) {}
+    record Inputs(TerrainShaderTranslator.Program shader, byte[] noise, byte[] cloudWater, byte[] deferredCloud) {}
 
     private ComplementaryShadowSmokeProbe() {}
 
@@ -108,6 +108,8 @@ final class ComplementaryShadowSmokeProbe {
         try {
             var noise = resources.get("noise", DynamicTexture.class, () -> load("noise", inputs.noise()));
             var cloud = resources.get("cloud", DynamicTexture.class, () -> load("cloud-water", inputs.cloudWater()));
+            var deferredCloud = inputs.deferredCloud() == inputs.cloudWater() ? cloud
+                    : resources.get("deferred cloud", DynamicTexture.class, () -> load("deferred-cloud", inputs.deferredCloud()));
             var repeat = resources.get("repeat", GpuSampler.class, () ->
                     device.createSampler(AddressMode.REPEAT, AddressMode.REPEAT, FilterMode.LINEAR, FilterMode.LINEAR, 1, OptionalDouble.empty()));
             var targets = resources.get("shadow colors", GpuTargets.class,
@@ -171,7 +173,7 @@ final class ComplementaryShadowSmokeProbe {
                 depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
                 ComplementaryTerrainDrawProbe.submit(resources, terrain, terrainData, vertices, count, atlas, noise.getTextureView(), repeat,
                         depthView, depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY), targets.write(0), targets.write(1),
-                        post, sky, translucent, geometry, cloud.getTextureView(), entities, particles, hand, features, camera, scene, light, section, verified);
+                        post, sky, translucent, geometry, cloud.getTextureView(), deferredCloud.getTextureView(), entities, particles, hand, features, camera, scene, light, section, verified);
                 MrtPass.draw(device, check, List.of(outputView), Map.of("ShadowDepth", depthView,
                         "ShadowColor0", targets.write(0), "ShadowColor1", targets.write(1)), nearest);
                 encoder.copyTextureToBuffer(output, readback, 0, () -> {

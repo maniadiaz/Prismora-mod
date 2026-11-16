@@ -3,6 +3,6 @@
  "minVersion": "0.8.7",
  "package": "com.prismora.mixin",
  "compatibilityLevel": "JAVA_21",
- "client": ["WorldProjectionMixin", "TerrainFrameMixin", "TerrainPipelineMixin", "TerrainMaterialsMixin", "TerrainWaterMixin", "TerrainSectionResultsMixin", "TerrainSectionMeshMixin", "GlTextureCacheMixin", "ComplementaryPresentMixin", "ComplementaryModelFeatureMixin", "ComplementaryModelCubeMixin", "ComplementaryItemFeatureMixin", "ComplementaryParticleMixin"],
+ "client": ["WorldProjectionMixin", "TerrainFrameMixin", "TerrainPipelineMixin", "TerrainMaterialsMixin", "TerrainWaterMixin", "TerrainSectionResultsMixin", "TerrainSectionMeshMixin", "GlTextureCacheMixin", "GlMipTextureMixin", "MipTextureExtentMixin", "ComplementaryPresentMixin", "ComplementaryModelFeatureMixin", "ComplementaryModelCubeMixin", "ComplementaryItemFeatureMixin", "ComplementaryParticleMixin"],
  "injectors": {"defaultRequire": 1}
 }

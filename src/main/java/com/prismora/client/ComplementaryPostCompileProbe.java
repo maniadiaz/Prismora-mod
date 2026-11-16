@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.OptionalInt;
 
 final class ComplementaryPostCompileProbe {
-    record Pass(String name, TerrainShaderTranslator.Program shader, List<GpuFormat> formats) {}
+    record Pass(String name, TerrainShaderTranslator.Program shader, List<GpuFormat> formats, List<String> mipInputs) {}
 
     private ComplementaryPostCompileProbe() {}
 
@@ -48,7 +48,10 @@ final class ComplementaryPostCompileProbe {
             List<GpuFormat> formats = name.equals("final")
                     ? List.of(GpuFormat.RGBA8_UNORM)
                     : outputs.stream().map(ComplementaryPostCompileProbe::format).toList();
-            var pass = new Pass(name, shader, formats);
+            var requests = java.util.regex.Pattern.compile("\\bconst\\s+bool\\s+(colortex[0-9]+)MipmapEnabled\\s*=\\s*true\\s*;")
+                    .matcher(fragment.source());
+            var mipInputs = requests.results().map(result -> result.group(1)).distinct().toList();
+            var pass = new Pass(name, shader, formats, mipInputs);
             try (var compiled = compile(pass)) {
                 passes.add(pass);
             } catch (RuntimeException failure) {

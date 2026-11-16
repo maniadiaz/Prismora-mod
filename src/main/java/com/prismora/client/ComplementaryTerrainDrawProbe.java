@@ -25,7 +25,7 @@ final class ComplementaryTerrainDrawProbe {
     static void submit(ComplementaryFrameResources resources, TerrainShaderTranslator.Program shader, ByteBuffer payload, GpuBuffer vertices, int indicesCount,
                        GpuTextureView atlas, GpuTextureView noise, GpuSampler repeat, GpuTextureView shadowDepth,
                        GpuTextureView shadowOpaqueDepth, GpuTextureView shadowColor, GpuTextureView shadowShaftColor, List<ComplementaryPostCompileProbe.Pass> post, ComplementaryPostCompileProbe.Pass sky,
-                       ComplementaryTranslucentPass.Program translucent, ComplementaryTranslucentPass.Geometry geometry, GpuTextureView cloud,
+                       ComplementaryTranslucentPass.Program translucent, ComplementaryTranslucentPass.Geometry geometry, GpuTextureView cloud, GpuTextureView deferredCloud,
                        ComplementaryEntityPass.Program entities, ComplementaryEntityPass.Program particles, ComplementaryEntityPass.Program hand, List<ComplementaryFeatureCapture.Draw> features,
                        TerrainCameraFrame camera, TerrainSceneUniforms scene, TerrainShadowFrame light, net.minecraft.core.SectionPos section, Runnable completed) {
         var modelsAndItems = features.stream().filter(feature -> feature.kind() == ComplementaryFeatureCapture.Kind.MODEL
@@ -158,7 +158,7 @@ final class ComplementaryTerrainDrawProbe {
                         "specular", specularView, "normals", specularView, "colortex6", materialCopy));
                 var translucencyMeasured = new java.util.concurrent.atomic.AtomicBoolean();
                 var handMeasured = new java.util.concurrent.atomic.AtomicBoolean();
-                ComplementaryPostDrawProbe.submit(resources, post, targets, sceneDepth, opaqueDepth, noise, repeat,
+                ComplementaryPostDrawProbe.submit(resources, post, targets, sceneDepth, opaqueDepth, noise, deferredCloud, repeat,
                         camera, scene, light, section, shadowTextures, attachments -> {
                             translucencyInputs.put("depthtex1", attachments.get("depthtex1"));
                             translucencyInputs.put("gaux2", attachments.get("colortex5"));

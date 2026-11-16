@@ -42,7 +42,7 @@ final class ComplementaryPostDrawProbe {
     }
 
     static void submit(ComplementaryFrameResources resources, List<ComplementaryPostCompileProbe.Pass> programs, GpuTargets terrain, GpuTextureView depth, GpuTextureView opaqueDepth,
-                       GpuTextureView noise, GpuSampler repeat, TerrainCameraFrame camera, TerrainSceneUniforms scene,
+                       GpuTextureView noise, GpuTextureView cloud, GpuSampler repeat, TerrainCameraFrame camera, TerrainSceneUniforms scene,
                        TerrainShadowFrame light, net.minecraft.core.SectionPos section, Map<String, GpuTextureView> shadows,
                        java.util.function.Consumer<Map<String, GpuTextureView>> drawTranslucency, Runnable completed) {
         var order = programs.stream().map(ComplementaryPostCompileProbe.Pass::name).toList();
@@ -52,6 +52,8 @@ final class ComplementaryPostDrawProbe {
         var device = RenderSystem.getDevice();
         var linear = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
         var nearest = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
+        var mipSampler = resources.get("mip sampler", GpuSampler.class, () -> device.createSampler(AddressMode.CLAMP_TO_EDGE,
+                AddressMode.CLAMP_TO_EDGE, FilterMode.LINEAR, FilterMode.LINEAR, 1, java.util.OptionalDouble.empty()));
         int width = terrain.write(0).getWidth(0), height = terrain.write(0).getHeight(0);
         int frameBytes = Math.multiplyExact(Math.multiplyExact(width, height), 4);
         int historyBytes = Math.multiplyExact(Math.multiplyExact(width, height), GpuFormat.RGBA16_FLOAT.blockSize());
@@ -118,9 +120,29 @@ final class ComplementaryPostDrawProbe {
                     if (frame == 1 && post.name().equals("composite6") && shader.samplers().contains("colortex2")) {
                         historyReused = firstHistory != null && available.get("colortex2") == firstHistory;
                     }
-                    if (!available.keySet().containsAll(shader.samplers())) {
+                    var passInputs = new java.util.HashMap<>(available);
+                    if (post.name().startsWith("deferred")) {
+                        passInputs.put("colortex3", cloud);
+                    }
+                    for (String name : post.mipInputs()) {
+                        var source = passInputs.get(name);
+                        if (source == null) {
+                            throw new IllegalStateException("Missing Complementary mip source " + name);
+                        }
+                        var format = source.texture().getFormat();
+                        var mip = resources.get("mips " + name + " " + format, ComplementaryMipChain.class,
+                                () -> new ComplementaryMipChain(name, format, source.getWidth(0), source.getHeight(0)));
+                        passInputs.put(name, mip.render(source));
+                        if (frame == 0) {
+                            if (name.equals("colortex0") && post.name().equals("deferred1")) {
+                                mip.verifyTail();
+                            }
+                            Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_MIP_PASS: {} {} -> {} levels", post.name(), name, mip.levels());
+                        }
+                    }
+                    if (!passInputs.keySet().containsAll(shader.samplers())) {
                         var missing = new java.util.TreeSet<>(shader.samplers());
-                        missing.removeAll(available.keySet());
+                        missing.removeAll(passInputs.keySet());
                         throw new IllegalStateException("Missing texture for Complementary " + post.name() + ": " + missing);
                     }
 
@@ -134,11 +156,11 @@ final class ComplementaryPostDrawProbe {
                             pass.setPipeline(program.compiled());
                             pass.setUniform(TerrainShaderTranslator.UNIFORM_BLOCK, uniforms);
                             for (String name : shader.samplers()) {
-                                var source = available.get(name);
+                                var source = passInputs.get(name);
                                 if (destinations.stream().anyMatch(destination -> source.texture() == destination.texture())) {
                                     throw new IllegalStateException("Complementary post attachment read/write alias: " + name);
                                 }
-                                var sampler = name.equals("noisetex") ? repeat
+                                var sampler = post.mipInputs().contains(name) ? mipSampler : name.equals("noisetex") || (name.equals("colortex3") && post.name().startsWith("deferred")) ? repeat
                                         : name.startsWith("depthtex") || name.startsWith("shadowtex") ? nearest : linear;
                                 pass.setUniform(name, source, sampler);
                             }

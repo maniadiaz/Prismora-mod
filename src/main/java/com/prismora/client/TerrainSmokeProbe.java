@@ -88,6 +88,7 @@ public final class TerrainSmokeProbe {
     private static volatile boolean uniformsVerified;
     private static volatile boolean shadowsVerified;
     private static TerrainPackCompileProbe.Programs packPrograms;
+    private static LegacyPack legacyPack;
     private record SectionMesh(SectionPos section, List<TerrainVertexData> faces) {}
     private static Map<SectionPos, List<TerrainVertexData>> previewSections = Map.of();
     private static int meshUpdates;
@@ -95,7 +96,7 @@ public final class TerrainSmokeProbe {
     private static int firstResourceCount;
     private static int firstPipelineCount;
     private static boolean closingWorld;
-    private enum EditCheck { PLACE, BREAK, UNLOAD, LOAD, DONE }
+    private enum EditCheck { PLACE, BREAK, UNLOAD, LOAD, NETHER, END, DONE }
     private static EditCheck editCheck;
     private static BlockPos editBlock;
     private static TerrainSectionGeometry editedMesh;
@@ -189,7 +190,7 @@ public final class TerrainSmokeProbe {
         if (vertexVerified && ComplementaryPresentProbe.verified()) {
             advancePreview(client);
         }
-        if (requestedPose == PREVIEW_YAW.size() - 1 && poseVerified && ComplementaryPresentProbe.verified()) {
+        if (client.level != null && client.player != null && requestedPose == PREVIEW_YAW.size() - 1 && poseVerified && ComplementaryPresentProbe.verified()) {
             verifySectionLifecycle(client);
         }
         if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified && shadowsVerified && ComplementaryPresentProbe.verified() && ComplementaryPresentProbe.generation() == PREVIEW_YAW.size() && editCheck == EditCheck.DONE))) {
@@ -247,7 +248,7 @@ public final class TerrainSmokeProbe {
 
     public static void renderComplementaryFrame() {
         var client = Minecraft.getInstance();
-        if (finished || !captureStarted || worldTicks <= 40 || cameraFrame == null
+        if (finished || editCheck == EditCheck.NETHER || editCheck == EditCheck.END || !captureStarted || worldTicks <= 40 || cameraFrame == null
                 || client.player == null || client.gui.overlay() != null || client.gui.screen() != null) {
             return;
         }
@@ -370,11 +371,27 @@ public final class TerrainSmokeProbe {
             }
             throw new IllegalStateException("No air block in the terrain edit fixture");
         }
+        if (editCheck == EditCheck.NETHER || editCheck == EditCheck.END) {
+            var dimension = client.level.dimension().identifier().toString();
+            var expected = editCheck == EditCheck.NETHER ? "minecraft:the_nether" : "minecraft:the_end";
+            if (!dimension.equals(expected) || client.gui.overlay() != null || client.gui.screen() != null) {
+                return;
+            }
+            packPrograms = loadDimension(dimension);
+            if (editCheck == EditCheck.NETHER) {
+                client.player.connection.sendCommand("execute in minecraft:the_end run tp @s 0 80 0");
+                editCheck = EditCheck.END;
+            } else {
+                editCheck = EditCheck.DONE;
+            }
+            return;
+        }
         if (editCheck == EditCheck.LOAD) {
             int destinationSection = SectionPos.blockToSectionCoord(-720);
             if (previewSections.keySet().stream().anyMatch(section -> section.x() == destinationSection)) {
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SECTION_LOAD_PASS: newly loaded section joined the visible mesh");
-                editCheck = EditCheck.DONE;
+                client.player.connection.sendCommand("execute in minecraft:the_nether run tp @s 0 80 0");
+                editCheck = EditCheck.NETHER;
             }
             return;
         }
@@ -516,11 +533,19 @@ public final class TerrainSmokeProbe {
     private static BlockMaterials loadMaterials() {
         try {
             var pack = new PackLoader().load(Path.of(PACK_FILE));
-            var legacy = LegacyPack.inspect(pack.id(), pack.files());
-            packPrograms = TerrainPackCompileProbe.verify(legacy);
-            return BlockMaterials.load(legacy, Map.of(), ShaderPreprocessor.environment());
+            legacyPack = LegacyPack.inspect(pack.id(), pack.files());
+            packPrograms = loadDimension(Minecraft.getInstance().level.dimension().identifier().toString());
+            return BlockMaterials.load(legacyPack, Map.of(), ShaderPreprocessor.environment());
         } catch (IOException failure) {
             throw new IllegalStateException("Could not load terrain materials from " + PACK_FILE, failure);
+        }
+    }
+
+    private static TerrainPackCompileProbe.Programs loadDimension(String dimension) {
+        try {
+            return TerrainPackCompileProbe.verify(legacyPack, dimension);
+        } catch (IOException failure) {
+            throw new IllegalStateException("Could not load Complementary for " + dimension, failure);
         }
     }
 

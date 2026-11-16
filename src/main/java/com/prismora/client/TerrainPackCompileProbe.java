@@ -21,33 +21,31 @@ final class TerrainPackCompileProbe {
 
     record Programs(TerrainShaderTranslator.Program terrain, ComplementaryShadowSmokeProbe.Inputs shadow, List<ComplementaryPostCompileProbe.Pass> post, ComplementaryPostCompileProbe.Pass sky, ComplementaryTranslucentPass.Program translucent, ComplementaryEntityPass.Program entities, ComplementaryEntityPass.Program particles, ComplementaryEntityPass.Program hand) {}
 
-    static Programs verify(LegacyPack pack) throws IOException {
+    static Programs verify(LegacyPack pack, String dimension) throws IOException {
         var options = Map.<String, String>of();
         var environment = ShaderPreprocessor.environment();
-        var dimension = "minecraft:overworld";
         var terrain = new PackContract(pack, options, environment, dimension).resolve("gbuffers_terrain").orElseThrow();
         var vertex = new ShaderPreprocessor(pack, options, environment).process(terrain.vertex());
         var fragment = new ShaderPreprocessor(pack, options, environment).process(terrain.fragment());
         var device = RenderSystem.getDevice();
         var translated = new TerrainShaderTranslator().translate(vertex, fragment, device.getDeviceInfo().isZZeroToOne());
         var slots = translated.outputSlots().stream().mapToInt(java.util.OptionalInt::orElseThrow).boxed().toList();
-        if (!slots.equals(List.of(0, 6, 4))) {
-            throw new IOException("Unexpected terrain targets: " + slots);
-        }
 
         try (var program = GpuProgram.withVertices(device, "complementary_terrain_compile", translated.vertex(), translated.fragment(),
-                List.of(GpuFormat.RG11B10_FLOAT, GpuFormat.RGBA8_UNORM, GpuFormat.RGBA8_SNORM),
+                slots.stream().map(ComplementaryPostCompileProbe::format).toList(),
                 TerrainVertexData.FORMAT, PrimitiveTopology.QUADS, translated.samplers(), DepthStencilState.DEFAULT,
                 List.of(TerrainShaderTranslator.UNIFORM_BLOCK))) {
             Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TERRAIN_COMPILE_PASS: {} / {}, outputs {}, {} uniforms and {} samplers",
                     terrain.vertex(), terrain.fragment(), slots, translated.uniformTypes().size(), translated.samplers().size());
-            return new Programs(translated, verifyShadow(pack, options, environment, dimension),
+            var programs = new Programs(translated, verifyShadow(pack, options, environment, dimension),
                     ComplementaryPostCompileProbe.verify(pack, options, environment, dimension),
                     ComplementarySkyPass.load(pack, options, environment, dimension),
                     ComplementaryTranslucentPass.load(pack, options, environment, dimension),
                     ComplementaryEntityPass.load("gbuffers_entities", pack, options, environment, dimension),
                     ComplementaryEntityPass.load("gbuffers_textured", pack, options, environment, dimension),
                     ComplementaryEntityPass.load("gbuffers_hand", pack, options, environment, dimension));
+            Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_DIMENSION_PASS: {} -> {}", dimension, terrain.fragment());
+            return programs;
         } catch (RuntimeException error) {
             Prismora.LOGGER.error("Terrain compiler source map: {}", translated.sourceFiles());
             throw error;
@@ -72,7 +70,8 @@ final class TerrainPackCompileProbe {
             Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SHADOW_COMPILE_PASS: {} / {}, outputs {}",
                     shadow.vertex(), shadow.fragment(), outputs);
             return new ComplementaryShadowSmokeProbe.Inputs(translated, texture(pack, contract, "texture.noise"),
-                    texture(pack, contract, "texture.gbuffers.gaux4"));
+                    texture(pack, contract, "texture.gbuffers.gaux4"),
+                    texture(pack, contract, "texture.deferred.colortex3"));
         } catch (RuntimeException error) {
             Prismora.LOGGER.error("Shadow compiler source map: {}", translated.sourceFiles());
             throw error;

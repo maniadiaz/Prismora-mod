@@ -116,3 +116,9 @@ El diagnóstico del Overworld captura la geometría real del agua y clasifica lo
 ## Etapa 2.3. Entidades, objetos, mano y partículas
 
 El diagnóstico del Overworld captura los modelos y objetos emitidos por el renderizador de Minecraft. En la escena de prueba, una vaca y un diamante arrojado pasan por gbuffers_entities y shadow. La lectura de GPU compara la profundidad de cada destino antes y después de añadir esos modelos. La mano usa gbuffers_hand con la proyección del HUD 3D y se comprueba por separado su contribución a la profundidad. Los quads de partículas se dibujan con gbuffers_textured y reciben la textura que generó deferred. El alcance de esta prueba es la configuración base de Complementary y el mundo de diagnóstico.
+
+## Etapa 2.4. Texturas, mipmaps y programas por dimensión
+
+El diagnóstico usa las texturas de ruido y las declaraciones de cloud-water de shaders.properties para los pases de geometría y deferred. El posprocesado genera una cadena de mipmaps desde la versión actual del adjunto antes de cada pase que la solicita. En la configuración base del Overworld están activas las solicitudes de deferred1, composite, composite4 y composite6. Se comprueba en GPU el texel de 1 × 1 de colortex0. Los niveles finales de las texturas rectangulares conservan al menos un texel en cada eje.
+
+La prueba entra al Nether y al End después del recorrido en el Overworld y compila los programas correspondientes a la dimensión activa. El dibujo completo con el pack se prueba en el Overworld. Quedan el dibujo continuo y la validación visual en el Nether y el End, además de las combinaciones de recursos y perfiles opcionales.

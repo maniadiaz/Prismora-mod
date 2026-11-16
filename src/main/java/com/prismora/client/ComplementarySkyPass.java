@@ -38,7 +38,7 @@ final class ComplementarySkyPass {
         if (!slots.equals(List.of(0))) {
             throw new IOException("Unexpected Complementary sky outputs: " + slots);
         }
-        var pass = new ComplementaryPostCompileProbe.Pass(NAME, shader, List.of(ComplementaryPostCompileProbe.format(0)));
+        var pass = new ComplementaryPostCompileProbe.Pass(NAME, shader, List.of(ComplementaryPostCompileProbe.format(0)), List.of());
         try (var compiled = ComplementaryPostCompileProbe.compile(pass)) {
             Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SKY_COMPILE_PASS: {} / {}", program.vertex(), program.fragment());
         }
