@@ -19,7 +19,7 @@ import java.util.Map;
 final class TerrainPackCompileProbe {
     private TerrainPackCompileProbe() {}
 
-    record Programs(TerrainShaderTranslator.Program terrain, ComplementaryShadowSmokeProbe.Inputs shadow) {}
+    record Programs(TerrainShaderTranslator.Program terrain, ComplementaryShadowSmokeProbe.Inputs shadow, List<ComplementaryPostCompileProbe.Pass> post) {}
 
     static Programs verify(LegacyPack pack) throws IOException {
         var options = Map.<String, String>of();
@@ -41,7 +41,8 @@ final class TerrainPackCompileProbe {
                 List.of(TerrainShaderTranslator.UNIFORM_BLOCK))) {
             Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TERRAIN_COMPILE_PASS: {} / {}, outputs {}, {} uniforms and {} samplers",
                     terrain.vertex(), terrain.fragment(), slots, translated.uniformTypes().size(), translated.samplers().size());
-            return new Programs(translated, verifyShadow(pack, options, environment, dimension));
+            return new Programs(translated, verifyShadow(pack, options, environment, dimension),
+                    ComplementaryPostCompileProbe.verify(pack, options, environment, dimension));
         } catch (RuntimeException error) {
             Prismora.LOGGER.error("Terrain compiler source map: {}", translated.sourceFiles());
             throw error;

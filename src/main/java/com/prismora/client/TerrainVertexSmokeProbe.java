@@ -139,7 +139,7 @@ final class TerrainVertexSmokeProbe {
                 encoder.submit();
                 TerrainIndexedSmokeProbe.submit(buffer, faces.size(), camera.clipFromSection(section), resultReady);
                 TerrainIndexedSmokeProbe.submitShadow(buffer, faces.size(), light, resultReady);
-                ComplementaryShadowSmokeProbe.submit(programs.shadow(), buffer, faces.size(), light, camera, section, programs.terrain(), resultReady);
+                ComplementaryShadowSmokeProbe.submit(programs.shadow(), buffer, faces.size(), light, camera, section, programs.terrain(), programs.post(), resultReady);
             } finally {
                 for (int i = 0; i < PLANES; i++) {
                     if (views[i] != null) views[i].close();

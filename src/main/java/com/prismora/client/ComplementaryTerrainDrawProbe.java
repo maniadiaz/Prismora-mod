@@ -25,7 +25,10 @@ final class ComplementaryTerrainDrawProbe {
 
     static void submit(TerrainShaderTranslator.Program shader, ByteBuffer payload, GpuBuffer vertices, int indicesCount,
                        GpuTextureView atlas, GpuTextureView noise, GpuSampler repeat, GpuTextureView shadowDepth,
-                       GpuTextureView shadowOpaqueDepth, GpuTextureView shadowColor, Runnable completed) {
+                       GpuTextureView shadowOpaqueDepth, GpuTextureView shadowColor, List<ComplementaryPostCompileProbe.Pass> post,
+                       TerrainCameraFrame camera, TerrainSceneUniforms scene, Runnable completed) {
+        var pending = new java.util.concurrent.atomic.AtomicInteger(2);
+        Runnable verified = () -> { if (pending.decrementAndGet() == 0) completed.run(); };
         var device = RenderSystem.getDevice();
         var nearest = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
         var color = new GpuTargets.Spec(TargetFormat.R11F_G11F_B10F, 1, 1, false, 0, 0, 0, 0);
@@ -72,6 +75,7 @@ final class ComplementaryTerrainDrawProbe {
                 }
                 pass.drawIndexed(indicesCount, 1, 0, 0, 0);
             }
+            ComplementaryPostDrawProbe.submit(post, targets.write(0), sceneDepth, noise, repeat, camera, scene, verified);
             MrtPass.draw(device, witness, List.of(outputView), Map.of("TerrainDepth", sceneDepth,
                     "Color", targets.write(0), "Material", targets.write(6), "NormalData", targets.write(4)), nearest);
             encoder.copyTextureToBuffer(output, readback, 0, () -> {
@@ -90,7 +94,7 @@ final class ComplementaryTerrainDrawProbe {
                 }
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TERRAIN_DRAW_PASS: colortex0={}, colortex6={}, colortex4={}, samplers={}",
                         colorCount, materialCount, normalCount, required);
-                completed.run();
+                verified.run();
             }, 0);
             encoder.submit();
         } catch (RuntimeException failure) {

@@ -34,7 +34,7 @@ final class ComplementaryShadowSmokeProbe {
     private ComplementaryShadowSmokeProbe() {}
 
     static void submit(Inputs inputs, GpuBuffer vertices, int faceCount, TerrainShadowFrame light,
-                       TerrainCameraFrame camera, SectionPos section, TerrainShaderTranslator.Program terrain, Runnable completed) {
+                       TerrainCameraFrame camera, SectionPos section, TerrainShaderTranslator.Program terrain, List<ComplementaryPostCompileProbe.Pass> post, Runnable completed) {
         var device = RenderSystem.getDevice();
         var client = Minecraft.getInstance();
         var shader = inputs.shader();
@@ -142,7 +142,7 @@ final class ComplementaryShadowSmokeProbe {
             }
             depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
             ComplementaryTerrainDrawProbe.submit(terrain, terrainData, vertices, count, atlas, noise.getTextureView(), repeat,
-                    depthView, depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY), targets.write(0), verified);
+                    depthView, depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY), targets.write(0), post, camera, scene, verified);
             MrtPass.draw(device, check, List.of(outputView), Map.of("ShadowDepth", depthView,
                     "ShadowColor0", targets.write(0), "ShadowColor1", targets.write(1)), nearest);
             encoder.copyTextureToBuffer(output, readback, 0, () -> {

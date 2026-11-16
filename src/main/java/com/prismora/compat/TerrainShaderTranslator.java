@@ -47,8 +47,17 @@ public final class TerrainShaderTranslator {
 
     public Program translate(ShaderPreprocessor.Result vertex, ShaderPreprocessor.Result fragment, boolean zeroToOne)
             throws IOException {
+        return translate(vertex, fragment, zeroToOne, false);
+    }
+
+    public Program translateScreen(ShaderPreprocessor.Result vertex, ShaderPreprocessor.Result fragment) throws IOException {
+        return translate(vertex, fragment, false, true);
+    }
+
+    private Program translate(ShaderPreprocessor.Result vertex, ShaderPreprocessor.Result fragment, boolean zeroToOne, boolean screen) throws IOException {
         var uniforms = new LinkedHashMap<String, String>();
         uniforms.put("prismoraTextureMatrix", "mat4[2]");
+        if (screen) uniforms.put("prismoraFogParams", "vec4");
         uniforms.put("prismoraProjection", "mat4");
         uniforms.put("prismoraModelView", "mat4");
         uniforms.put("prismoraNormalMatrix", "mat3");
@@ -58,9 +67,18 @@ public final class TerrainShaderTranslator {
         var slots = DrawBuffers.parse(fragment);
         var vs = stage(vertex.source(), true, uniforms, defaults, samplers, varyings);
         var fs = stage(fragment.source(), false, uniforms, defaults, samplers, varyings);
+        if (screen) fs = legacyFog(fs);
         String block = new TerrainUniformLayout(uniforms).declaration(UNIFORM_BLOCK);
 
-        String vertexInputs = """
+        String vertexInputs = screen ? """
+                vec2 prismoraScreenUv(){
+                    return vec2(float((gl_VertexIndex<<1)&2),float(gl_VertexIndex&2));
+                }
+                #define UV0 prismoraScreenUv()
+                #define Position vec3(UV0,0.0)
+                #define UV2 ivec2(0)
+                vec4 prismoraTransform(){ return vec4(UV0*2.0-1.0,0.0,1.0); }
+                """ : """
                 layout(location=0) in vec3 Position;
                 layout(location=1) in vec2 UV0;
                 layout(location=2) in vec4 mc_Entity;
@@ -72,7 +90,7 @@ public final class TerrainShaderTranslator {
                 vec4 prismoraTransform(){return prismoraProjection*prismoraModelView*vec4(Position,1.0);}
                 #define main prismoraLegacyTerrainMain
                 """;
-        String vertexEnd = "\n#undef main\nvoid main(){prismoraLegacyTerrainMain(); gl_Position.z = "
+        String vertexEnd = screen ? "" : "\n#undef main\nvoid main(){prismoraLegacyTerrainMain(); gl_Position.z = "
                 + (zeroToOne ? "(gl_Position.w-gl_Position.z)*0.5" : "-gl_Position.z") + ";}\n";
         String fragmentInputs = "layout(location=0) out vec4 prismoraFragData[" + slots.size() + "];\n"
                 + ShadowDepthSampling.GLSL;
@@ -163,6 +181,20 @@ public final class TerrainShaderTranslator {
             result.replace(edit.start(), edit.end(), edit.replacement());
         }
         return result.toString().replaceAll("(?m)^[ \\t]*#extension[^\\r\\n]*", "");
+    }
+
+    private static String legacyFog(String source) {
+        var refs = Pattern.compile("\\bgl_Fog\\s*\\.\\s*(start|scale|end|density)\\b").matcher(LegacyTranslator.mask(source));
+        var edits = new ArrayList<Edit>();
+        while (refs.find()) {
+            int index = List.of("start", "scale", "end", "density").indexOf(refs.group(1));
+            edits.add(new Edit(refs.start(), refs.end(), "prismoraFogParams." + "xyzw".charAt(index)));
+        }
+        var text = new StringBuilder(source);
+        for (var edit : edits.reversed()) {
+            text.replace(edit.start(), edit.end(), edit.replacement());
+        }
+        return text.toString();
     }
 
     private static int width(String type) {

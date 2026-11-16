@@ -74,6 +74,11 @@ public final class TerrainUniformLayout {
         target.putInt(base, x).putInt(base + 4, y);
     }
 
+    public void putVec4(ByteBuffer target, String name, float x, float y, float z, float w) {
+        int base = field(name, "vec4").offset();
+        target.putFloat(base, x).putFloat(base + 4, y).putFloat(base + 8, z).putFloat(base + 12, w);
+    }
+
     public void putVec3(ByteBuffer target, String name, float x, float y, float z) {
         int base = field(name, "vec3").offset();
         target.putFloat(base, x).putFloat(base + 4, y).putFloat(base + 8, z);

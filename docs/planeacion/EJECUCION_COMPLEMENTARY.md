@@ -83,6 +83,12 @@ Un ensayo posterior calcula una vista ortográfica local con los ángulos de sol
 
 El programa `shadow` real del ZIP también se ejecutó sobre una sección de Minecraft. El traductor retira las declaraciones de samplers que el código preprocesado no referencia, y el pase enlaza el atlas del juego y el ruido del ZIP. La lectura confirmó escrituras en profundidad, `shadowcolor0` y `shadowcolor1` en 312 texeles de OpenGL y 5 144 de Vulkan. Son secciones distintas dibujadas en un volumen local. El paso siguiente enlazó al programa real `gbuffers_terrain` la profundidad, su copia de terreno opaco y `shadowcolor0`, junto con el atlas y el ruido del ZIP. La configuración base usa una textura specular neutra para el terreno vanilla sin recursos PBR. La lectura GPU confirmó color, material y normales en los destinos 0, 6 y 4, respectivamente. OpenGL dio 2 938 muestras en cada salida. Vulkan dio 2 331, 1 618 y 2 331 muestras. Las secciones fueron distintas. El ensayo sigue aislado en una sección, con la profundidad opaca duplicada para ambos samplers. Quedan las transparencias, el historial, los objetos fuera de cámara y el cuadro final en pantalla.
 
+## Posprocesado del Overworld (E09, en curso)
+
+Compilaron y enlazaron los nueve programas posteriores activos de la configuración base en OpenGL y Vulkan: deferred1, composite, composite1, composite3, composite4, composite5, composite6, composite7 y final. La traducción de pantalla adapta el triángulo, las UV y los parámetros legacy de niebla.
+
+El ensayo conectó el color y la profundidad del terreno real a composite3, composite4, composite5 y final. Convierte la profundidad nativa a la convención de la entrada legacy. La lectura GPU confirmó 2 226 píxeles de color por encima del umbral en OpenGL y 6 019 en Vulkan para secciones distintas. Los otros cinco programas solo se compilaron. La salida se generó fuera de pantalla, con texturas de un solo nivel. Quedan el grafo completo, los mipmaps, el historial y la presentación en el juego.
+
 ## Hallazgo para E10
 
 Las fuentes de la plataforma fijada exponen únicamente VERTEX y FRAGMENT en `com/mojang/renderpearl/api/pipeline/ShaderType.java`. `GpuDevice`/`CommandEncoder` no exponen dispatch de compute; `UniformType` ofrece sampler, uniform buffer y texel buffer, sin contrato SSBO/storage-image. Por tanto, compute/imágenes/SSBO requieren ampliar el puente, no activar flags falsos. Este hallazgo no se marca como una implementación de E10 ni impide continuar el camino gráfico base.
