@@ -1,6 +1,7 @@
 package com.prismora.client;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.QuadInstance;
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.renderpearl.api.GpuFormat;
@@ -179,19 +180,19 @@ public final class TerrainSmokeProbe {
     }
 
     private static boolean containsVisibleFace(SectionMesh mesh) {
-        var clip = cameraFrame.clipFromSection(mesh.section());
-        var position = new org.joml.Vector4f();
+        var frustum = new org.joml.FrustumIntersection(cameraFrame.clipFromSection(mesh.section()));
         for (var face : mesh.faces()) {
-            float x = 0, y = 0, z = 0;
+            float minX = Float.POSITIVE_INFINITY, minY = Float.POSITIVE_INFINITY, minZ = Float.POSITIVE_INFINITY;
+            float maxX = Float.NEGATIVE_INFINITY, maxY = Float.NEGATIVE_INFINITY, maxZ = Float.NEGATIVE_INFINITY;
             for (var corner : face.corners()) {
-                x += corner.x();
-                y += corner.y();
-                z += corner.z();
+                minX = Math.min(minX, corner.x());
+                minY = Math.min(minY, corner.y());
+                minZ = Math.min(minZ, corner.z());
+                maxX = Math.max(maxX, corner.x());
+                maxY = Math.max(maxY, corner.y());
+                maxZ = Math.max(maxZ, corner.z());
             }
-            clip.transform(position.set(x * 0.25f, y * 0.25f, z * 0.25f, 1f));
-            float margin = position.w * 0.85f;
-            if (position.w > 0f && Math.abs(position.x) < margin && Math.abs(position.y) < margin
-                    && position.z > -position.w && position.z < position.w) {
+            if (frustum.testAab(minX, minY, minZ, maxX, maxY, maxZ)) {
                 return true;
             }
         }
@@ -202,12 +203,12 @@ public final class TerrainSmokeProbe {
         return materials.id(state);
     }
 
-    public static void recordMaterial(int id, float x, float y, float z, BakedQuad quad) {
+    public static void recordMaterial(int id, float x, float y, float z, BakedQuad quad, QuadInstance instance) {
         var faces = building.get().faces();
         if (faces.size() >= 65_536) {
             throw new IllegalStateException("Section exceeds the terrain probe's face budget");
         }
-        var face = TerrainVertexData.from(id, x, y, z, quad);
+        var face = TerrainVertexData.from(id, x, y, z, quad, instance);
         var attrs = face.attributes();
         float dot = attrs.nx() * attrs.tx() + attrs.ny() * attrs.ty() + attrs.nz() * attrs.tz();
         if (!(Math.abs(dot) < 0.0001f && Float.isFinite(attrs.midU()) && Float.isFinite(attrs.midV()))) {

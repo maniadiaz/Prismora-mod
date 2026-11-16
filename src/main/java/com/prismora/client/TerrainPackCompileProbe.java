@@ -4,7 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.GpuFormat;
 import com.mojang.renderpearl.api.pipeline.DepthStencilState;
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
-import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.prismora.render.runtime.TerrainVertexData;
 import com.prismora.Prismora;
 import com.prismora.compat.LegacyPack;
 import com.prismora.compat.PackContract;
@@ -33,19 +33,9 @@ final class TerrainPackCompileProbe {
             throw new IOException("Unexpected terrain targets: " + slots);
         }
 
-        var format = VertexFormat.builder(0)
-                .addAttribute("Position", GpuFormat.RGB32_FLOAT)
-                .addAttribute("UV0", GpuFormat.RG32_FLOAT)
-                .addAttribute("mc_Entity", GpuFormat.RGBA32_FLOAT)
-                .addAttribute("Normal", GpuFormat.RGB32_FLOAT)
-                .addAttribute("at_tangent", GpuFormat.RGBA32_FLOAT)
-                .addAttribute("mc_midTexCoord", GpuFormat.RGBA32_FLOAT)
-                .addAttribute("Color", GpuFormat.RGBA8_UNORM)
-                .addAttribute("UV2", GpuFormat.RG16_SINT)
-                .build();
         try (var program = GpuProgram.withVertices(device, "complementary_terrain_compile", translated.vertex(), translated.fragment(),
                 List.of(GpuFormat.RG11B10_FLOAT, GpuFormat.RGBA8_UNORM, GpuFormat.RGBA8_SNORM),
-                format, PrimitiveTopology.QUADS, translated.samplers(), DepthStencilState.DEFAULT,
+                TerrainVertexData.FORMAT, PrimitiveTopology.QUADS, translated.samplers(), DepthStencilState.DEFAULT,
                 List.of(TerrainShaderTranslator.UNIFORM_BLOCK))) {
             Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TERRAIN_COMPILE_PASS: {} / {}, outputs {}, {} uniforms and {} samplers",
                     terrain.vertex(), terrain.fragment(), slots, translated.uniformTypes().size(), translated.samplers().size());

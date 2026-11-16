@@ -18,31 +18,37 @@ import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 
 final class TerrainVertexSmokeProbe {
     private static final int CORNERS = 4;
-    private static final int PLANES = 4;
+    private static final int PLANES = 6;
     private static final int WIDTH = 256;
     private static final String VERTEX = """
             #version 330
             #extension GL_ARB_separate_shader_objects : require
             layout(location=0) in vec3 Position;
             layout(location=1) in vec2 UV0;
-            layout(location=2) in float mc_Entity;
+            layout(location=2) in vec4 mc_Entity;
             layout(location=3) in vec3 Normal;
             layout(location=4) in vec4 at_tangent;
-            layout(location=5) in vec2 mc_midTexCoord;
+            layout(location=5) in vec4 mc_midTexCoord;
+            layout(location=6) in vec4 Color;
+            layout(location=7) in ivec2 UV2;
             layout(location=0) flat out vec4 positionAndId;
             layout(location=1) flat out vec4 uvAndCenter;
             layout(location=2) flat out vec3 normal;
             layout(location=3) flat out vec4 tangent;
+            layout(location=4) flat out vec4 color;
+            layout(location=5) flat out vec4 lightAndPadding;
             void main() {
                 int column = gl_VertexIndex % %WIDTH%;
                 int row = gl_VertexIndex / %WIDTH%;
                 vec2 pixel = vec2(column, row) + vec2(0.5);
                 gl_Position = vec4(pixel * 2.0 / vec2(%WIDTH%, %HEIGHT%) - 1.0, 0.0, 1.0);
                 gl_PointSize = 1.0;
-                positionAndId = vec4(Position, mc_Entity);
-                uvAndCenter = vec4(UV0, mc_midTexCoord);
-                normal = Normal;
+                positionAndId = vec4(Position, mc_Entity.x);
+                uvAndCenter = vec4(UV0, mc_midTexCoord.xy);
+                normal = Normal * (mc_Entity.w == 1.0 && mc_midTexCoord.w == 1.0 ? 1.0 : 0.0);
                 tangent = at_tangent;
+                color = Color;
+                lightAndPadding = vec4(vec2(UV2), mc_Entity.y + mc_Entity.z, mc_midTexCoord.z);
             }
             """;
     private static final String FRAGMENT = """
@@ -52,15 +58,21 @@ final class TerrainVertexSmokeProbe {
             layout(location=1) flat in vec4 uvAndCenter;
             layout(location=2) flat in vec3 normal;
             layout(location=3) flat in vec4 tangent;
+            layout(location=4) flat in vec4 color;
+            layout(location=5) flat in vec4 lightAndPadding;
             layout(location=0) out vec4 outPosition;
             layout(location=1) out vec4 outUv;
             layout(location=2) out vec4 outNormal;
             layout(location=3) out vec4 outTangent;
+            layout(location=4) out vec4 outColor;
+            layout(location=5) out vec4 outLight;
             void main() {
                 outPosition = positionAndId;
                 outUv = uvAndCenter;
                 outNormal = vec4(normal, 1.0);
                 outTangent = tangent;
+                outColor = color;
+                outLight = lightAndPadding;
             }
             """;
 
@@ -145,8 +157,13 @@ final class TerrainVertexSmokeProbe {
             check(result, index, planeBytes, 1, corner.u(), corner.v(), attrs.midU(), attrs.midV());
             check(result, index, planeBytes, 2, attrs.nx(), attrs.ny(), attrs.nz(), 1f);
             check(result, index, planeBytes, 3, attrs.tx(), attrs.ty(), attrs.tz(), attrs.handedness());
+            int argb = corner.argb();
+            check(result, index, planeBytes, 4, ((argb >>> 16) & 255) / 255f, ((argb >>> 8) & 255) / 255f,
+                    (argb & 255) / 255f, (argb >>> 24) / 255f);
+            int light = corner.light();
+            check(result, index, planeBytes, 5, (short) light, (short) (light >>> 16), 0, 0);
         }
-        Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_VERTEX_PASS: {} vertices from {} real block-model faces matched", faces.size() * CORNERS, faces.size());
+        Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_VERTEX_PASS: {} vertices from {} real block-model faces matched, including RGBA and lightmap coordinates", faces.size() * CORNERS, faces.size());
     }
 
     private static void check(ByteBuffer result, int vertex, int planeBytes, int plane, float... expected) {

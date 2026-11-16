@@ -31,7 +31,7 @@ final class TerrainIndexedSmokeProbe {
             layout(std140) uniform TerrainCamera { mat4 ClipFromSection; };
             layout(location=0) in vec3 Position;
             layout(location=1) in vec2 UV0;
-            layout(location=2) in float mc_Entity;
+            layout(location=2) in vec4 mc_Entity;
             layout(location=3) in vec3 Normal;
             layout(location=0) out vec2 uv;
             layout(location=1) flat out float blockId;
@@ -39,7 +39,7 @@ final class TerrainIndexedSmokeProbe {
             void main() {
                 gl_Position = ClipFromSection * vec4(Position, 1.0);
                 uv = UV0;
-                blockId = mc_Entity;
+                blockId = mc_Entity.x;
                 faceNormal = Normal;
             }
             """;

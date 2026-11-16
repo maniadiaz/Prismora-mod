@@ -3,7 +3,7 @@
 "E01","Preprocesado y contrato del pack","En curso: perfiles propiedades contexto y fallbacks corregidos y probados","E00","A y B","Contratos deterministas de perfiles y dimensiones","PackContractTest; ProgramCatalogTest; PreprocessorTest; regresion legacy OpenGL/Vulkan",""
 "E02","Recursos GPU y MRT","En curso: MRT y capturas de profundidad probados en OpenGL y Vulkan; asignacion de formatos y grafo mundial pendientes","E01","A y B","GPU verifica MRT HDR SNORM flip y liberacion","Test-PackagedClient.ps1 -Probe mrt; EJECUCION_COMPLEMENTARY.md",""
 "E03","Compilador GLSL del mundo","En curso: gbuffers_terrain base del Overworld enlaza en OpenGL y Vulkan; ejecucion y demas programas pendientes","E01;E02","A y B","Programas graficos activos compilan en ambos backends","",""
-"E04","Terreno y materiales","En curso: seccion visible con camara real y gbuffers_terrain base compilado; enlace de recursos al dibujo e integracion mundial pendientes","E02;E03","A y B","Terreno real con IDs normales y tangentes correctos","Test-PackagedClient.ps1 -Probe terrain",""
+"E04","Terreno y materiales","En curso: formato de vertices compartido con gbuffers_terrain y verificado con color y luz reales; uniforms texturas y dibujo del pack pendientes","E02;E03","A y B","Terreno real con IDs normales y tangentes correctos","Test-PackagedClient.ps1 -Probe terrain",""
 "E05","Entidades mano y efectos","Pendiente","E04","A y B","Todas las categorias visibles con sus programas","",""
 "E06","Agua transparencias cielo y profundidades","Pendiente","E04;E05","A y B","Transparencia y profundidades de etapas distintas correctas","",""
 "E07","Sombras de sol y luna","Pendiente","E04;E05;E06","A y B","Sombras de objetos fuera de camara y cutouts correctas","",""

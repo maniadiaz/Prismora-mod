@@ -44,7 +44,7 @@ abstract class TerrainMaterialsMixin {
         int material = TerrainSmokeProbe.materialId(state);
         renderer.tesselateBlock((qx, qy, qz, quad, instance) -> {
             output.put(qx, qy, qz, quad, instance);
-            TerrainSmokeProbe.recordMaterial(material, qx, qy, qz, quad);
+            TerrainSmokeProbe.recordMaterial(material, qx, qy, qz, quad, instance);
         }, x, y, z, world, position, state, model, seed, modelData);
     }
 }

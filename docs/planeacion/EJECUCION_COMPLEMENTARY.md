@@ -69,6 +69,8 @@ El ensayo de terreno aún usa GLSL de diagnóstico. Quedan el envío normal de t
 .\scripts\Test-PackagedClient.ps1 -Backend vulkan -Probe terrain -ComplementaryPack $zip -FreshWorld
 ```
 
+El buffer de terreno y el compilador de `gbuffers_terrain` ya comparten el mismo formato de vértices. El buffer conserva el color por esquina y las dos coordenadas de luz con la emisión aplicada por Minecraft. Se verificaron por lectura GPU los ocho atributos del formato, incluidos RGBA y UV2, en 3 104 vértices de OpenGL y 3 120 de Vulkan. El GLSL del pack enlaza con ese formato. Queda completar las matrices, uniforms y texturas reales del programa antes de dibujar con él.
+
 ## Hallazgo para E10
 
 Las fuentes de la plataforma fijada exponen únicamente VERTEX y FRAGMENT en `com/mojang/renderpearl/api/pipeline/ShaderType.java`. `GpuDevice`/`CommandEncoder` no exponen dispatch de compute; `UniformType` ofrece sampler, uniform buffer y texel buffer, sin contrato SSBO/storage-image. Por tanto, compute/imágenes/SSBO requieren ampliar el puente, no activar flags falsos. Este hallazgo no se marca como una implementación de E10 ni impide continuar el camino gráfico base.
