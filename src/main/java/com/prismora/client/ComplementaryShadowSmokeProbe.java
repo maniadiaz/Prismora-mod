@@ -33,7 +33,7 @@ final class ComplementaryShadowSmokeProbe {
 
     private ComplementaryShadowSmokeProbe() {}
 
-    static void submit(Inputs inputs, GpuBuffer vertices, int faceCount, TerrainShadowFrame light,
+    static void submit(ComplementaryFrameResources resources, Inputs inputs, GpuBuffer vertices, int faceCount, TerrainShadowFrame light,
                        TerrainCameraFrame camera, SectionPos section, TerrainShaderTranslator.Program terrain, List<ComplementaryPostCompileProbe.Pass> post, Runnable completed) {
         var device = RenderSystem.getDevice();
         var client = Minecraft.getInstance();
@@ -74,9 +74,9 @@ final class ComplementaryShadowSmokeProbe {
         var terrainLayout = new TerrainUniformLayout(terrain.uniformTypes());
         var terrainData = terrainLayout.allocate();
         scene.write(terrainLayout, terrainData);
-        terrainLayout.putFloat(terrainData, "viewWidth", 128);
-        terrainLayout.putFloat(terrainData, "viewHeight", 128);
-        terrainLayout.putFloat(terrainData, "aspectRatio", 1);
+        terrainLayout.putFloat(terrainData, "viewWidth", resources.width());
+        terrainLayout.putFloat(terrainData, "viewHeight", resources.height());
+        terrainLayout.putFloat(terrainData, "aspectRatio", (float) resources.width() / resources.height());
         var terrainView = camera.modelViewFromSection(section);
         terrainLayout.put(terrainData, "prismoraProjection", cameraProjection);
         terrainLayout.put(terrainData, "prismoraModelView", terrainView);
@@ -101,78 +101,89 @@ final class ComplementaryShadowSmokeProbe {
         var color = new GpuTargets.Spec(TargetFormat.RGBA8, 1, 1, false, 0, 0, 0, 0);
         var readback = device.createBuffer(() -> "Complementary shadow witness", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ,
                 SIZE * SIZE * 4L);
-        try (var noise = load("noise", inputs.noise());
-             var cloud = load("cloud-water", inputs.cloudWater());
-             var repeat = device.createSampler(AddressMode.REPEAT, AddressMode.REPEAT, FilterMode.LINEAR, FilterMode.LINEAR, 1, OptionalDouble.empty());
-             var uniforms = device.createBuffer(() -> "Complementary shadow uniforms", GpuBuffer.USAGE_UNIFORM, uniformData);
-             var targets = new GpuTargets(device, Map.of(0, color, 1, color), SIZE, SIZE, 1024 * 1024);
-             var depth = new GpuDepthTargets(device, SIZE, SIZE, 1024 * 1024);
-             var check = witnessProgram();
-             var output = device.createTexture("Complementary shadow validation", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC,
+        try {
+            var noise = resources.get("noise", DynamicTexture.class, () -> load("noise", inputs.noise()));
+            var cloud = resources.get("cloud", DynamicTexture.class, () -> load("cloud-water", inputs.cloudWater()));
+            var repeat = resources.get("repeat", GpuSampler.class, () ->
+                    device.createSampler(AddressMode.REPEAT, AddressMode.REPEAT, FilterMode.LINEAR, FilterMode.LINEAR, 1, OptionalDouble.empty()));
+            var targets = resources.get("shadow colors", GpuTargets.class,
+                    () -> new GpuTargets(device, Map.of(0, color, 1, color), SIZE, SIZE, 1024 * 1024));
+            var depth = resources.get("shadow depth", GpuDepthTargets.class,
+                    () -> new GpuDepthTargets(device, SIZE, SIZE, 1024 * 1024));
+            targets.clear(true);
+            depth.beginFrame();
+            try (var uniforms = device.createBuffer(() -> "Complementary shadow uniforms", GpuBuffer.USAGE_UNIFORM, uniformData);
+                 var check = witnessProgram();
+                 var output = device.createTexture("Complementary shadow validation", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC,
                      GpuFormat.RGBA8_UNORM, SIZE, SIZE, 1, 1);
-             var outputView = device.createTextureView(output)) {
-            var program = ComplementaryPreviewPipelines.get("shadow", () -> GpuProgram.withVertices(device, "complementary_shadow_draw", shader.vertex(), shader.fragment(),
-                     List.of(GpuFormat.RGBA8_UNORM, GpuFormat.RGBA8_UNORM), TerrainVertexData.FORMAT, PrimitiveTopology.QUADS,
-                     shader.samplers(), DepthStencilState.DEFAULT, List.of(TerrainShaderTranslator.UNIFORM_BLOCK)));
-            var known = Map.of("tex", atlas, "noisetex", noise.getTextureView(), "gaux4", cloud.getTextureView(),
-                    "lightmap", client.gameRenderer.lightmap());
-            var required = new TreeSet<>(((FrontendRenderPipeline) program.compiled()).uniformIndices().keySet());
-            required.remove(TerrainShaderTranslator.UNIFORM_BLOCK);
-            var missing = new TreeSet<>(required);
-            missing.removeAll(known.keySet());
-            if (!missing.isEmpty()) {
-                throw new IllegalStateException("Active Complementary shadow samplers without scene resources: " + missing + "; active=" + required);
-            }
-            var depthView = depth.view(GpuDepthTargets.Stage.SCENE);
-            var descriptor = RenderPassDescriptor.builder(() -> "Complementary shadow draw")
-                    .withColorAttachment(targets.write(0)).withColorAttachment(targets.write(1)).withDepthAttachment(depthView).build();
-            int count = faceCount * 6;
-            var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
-            var indexBuffer = indices.getBuffer(count);
-            var encoder = device.createCommandEncoder();
-            try (var pass = encoder.createRenderPass(descriptor)) {
-                pass.setPipeline(program.compiled());
-                pass.setVertexBuffer(0, vertices.slice());
-                pass.setIndexBuffer(indexBuffer, indices.type());
-                pass.setUniform(TerrainShaderTranslator.UNIFORM_BLOCK, uniforms);
-                for (String name : required) {
-                    pass.setUniform(name, known.get(name), name.equals("noisetex") || name.equals("gaux4") ? repeat : nearest);
+                 var outputView = device.createTextureView(output)) {
+                var program = ComplementaryPreviewPipelines.get("shadow", () -> GpuProgram.withVertices(device, "complementary_shadow_draw", shader.vertex(), shader.fragment(),
+                         List.of(GpuFormat.RGBA8_UNORM, GpuFormat.RGBA8_UNORM), TerrainVertexData.FORMAT, PrimitiveTopology.QUADS,
+                         shader.samplers(), DepthStencilState.DEFAULT, List.of(TerrainShaderTranslator.UNIFORM_BLOCK)));
+                var known = Map.of("tex", atlas, "noisetex", noise.getTextureView(), "gaux4", cloud.getTextureView(),
+                        "lightmap", client.gameRenderer.lightmap());
+                var required = new TreeSet<>(((FrontendRenderPipeline) program.compiled()).uniformIndices().keySet());
+                required.remove(TerrainShaderTranslator.UNIFORM_BLOCK);
+                var missing = new TreeSet<>(required);
+                missing.removeAll(known.keySet());
+                if (!missing.isEmpty()) {
+                    throw new IllegalStateException("Active Complementary shadow samplers without scene resources: " + missing + "; active=" + required);
                 }
-                pass.drawIndexed(count, 1, 0, 0, 0);
-            }
-            depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
-            ComplementaryTerrainDrawProbe.submit(terrain, terrainData, vertices, count, atlas, noise.getTextureView(), repeat,
-                    depthView, depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY), targets.write(0), targets.write(1),
-                    post, camera, scene, light, section, verified);
-            MrtPass.draw(device, check, List.of(outputView), Map.of("ShadowDepth", depthView,
-                    "ShadowColor0", targets.write(0), "ShadowColor1", targets.write(1)), nearest);
-            encoder.copyTextureToBuffer(output, readback, 0, () -> {
-                int depthCount = 0, color0Count = 0, color1Count = 0;
-                try (readback; var mapping = readback.map(true, false)) {
-                    var bytes = mapping.data();
-                    for (int i = 0; i < SIZE * SIZE * 4; i += 4) {
-                        if (bytes.get(i) != 0) depthCount++;
-                        if (bytes.get(i + 1) != 0) color0Count++;
-                        if (bytes.get(i + 2) != 0) color1Count++;
+                var depthView = depth.view(GpuDepthTargets.Stage.SCENE);
+                var descriptor = RenderPassDescriptor.builder(() -> "Complementary shadow draw")
+                        .withColorAttachment(targets.write(0)).withColorAttachment(targets.write(1)).withDepthAttachment(depthView).build();
+                int count = faceCount * 6;
+                var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
+                var indexBuffer = indices.getBuffer(count);
+                var encoder = device.createCommandEncoder();
+                try (var pass = encoder.createRenderPass(descriptor)) {
+                    pass.setPipeline(program.compiled());
+                    pass.setVertexBuffer(0, vertices.slice());
+                    pass.setIndexBuffer(indexBuffer, indices.type());
+                    pass.setUniform(TerrainShaderTranslator.UNIFORM_BLOCK, uniforms);
+                    for (String name : required) {
+                        pass.setUniform(name, known.get(name), name.equals("noisetex") || name.equals("gaux4") ? repeat : nearest);
                     }
+                    pass.drawIndexed(count, 1, 0, 0, 0);
                 }
-                if (depthCount < 16 || color0Count < 16 || color1Count < 16) {
-                    throw new IllegalStateException("Real Complementary shadow outputs have insufficient coverage: "
-                            + depthCount + "/" + color0Count + "/" + color1Count);
-                }
-                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SHADOW_DRAW_PASS: {} faces, depth={}, shadowcolor0={}, shadowcolor1={}, samplers={}",
-                        faceCount, depthCount, color0Count, color1Count, required);
-                verified.run();
-            }, 0);
-            encoder.submit();
-        } catch (IOException | RuntimeException failure) {
+                depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
+                ComplementaryTerrainDrawProbe.submit(resources, terrain, terrainData, vertices, count, atlas, noise.getTextureView(), repeat,
+                        depthView, depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY), targets.write(0), targets.write(1),
+                        post, camera, scene, light, section, verified);
+                MrtPass.draw(device, check, List.of(outputView), Map.of("ShadowDepth", depthView,
+                        "ShadowColor0", targets.write(0), "ShadowColor1", targets.write(1)), nearest);
+                encoder.copyTextureToBuffer(output, readback, 0, () -> {
+                    int depthCount = 0, color0Count = 0, color1Count = 0;
+                    try (readback; var mapping = readback.map(true, false)) {
+                        var bytes = mapping.data();
+                        for (int i = 0; i < SIZE * SIZE * 4; i += 4) {
+                            if (bytes.get(i) != 0) depthCount++;
+                            if (bytes.get(i + 1) != 0) color0Count++;
+                            if (bytes.get(i + 2) != 0) color1Count++;
+                        }
+                    }
+                    if (depthCount < 16 || color0Count < 16 || color1Count < 16) {
+                        throw new IllegalStateException("Real Complementary shadow outputs have insufficient coverage: "
+                                + depthCount + "/" + color0Count + "/" + color1Count);
+                    }
+                    Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SHADOW_DRAW_PASS: {} faces, depth={}, shadowcolor0={}, shadowcolor1={}, samplers={}",
+                            faceCount, depthCount, color0Count, color1Count, required);
+                    verified.run();
+                }, 0);
+                encoder.submit();
+            }
+        } catch (RuntimeException failure) {
             readback.close();
             throw new IllegalStateException("Complementary shadow render failed", failure);
         }
     }
 
-    private static DynamicTexture load(String label, byte[] contents) throws IOException {
-        return new DynamicTexture(() -> "Complementary " + label, NativeImage.read(contents));
+    private static DynamicTexture load(String label, byte[] contents) {
+        try {
+            return new DynamicTexture(() -> "Complementary " + label, NativeImage.read(contents));
+        } catch (IOException failure) {
+            throw new IllegalStateException("Could not load Complementary " + label, failure);
+        }
     }
 
     private static GpuProgram witnessProgram() {

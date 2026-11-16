@@ -18,12 +18,11 @@ import java.util.Map;
 import java.util.TreeSet;
 
 final class ComplementaryTerrainDrawProbe {
-    private static final int SIZE = 128;
     private static final String HEADER = "#version 330\n#extension GL_ARB_separate_shader_objects : require\n";
 
     private ComplementaryTerrainDrawProbe() {}
 
-    static void submit(TerrainShaderTranslator.Program shader, ByteBuffer payload, GpuBuffer vertices, int indicesCount,
+    static void submit(ComplementaryFrameResources resources, TerrainShaderTranslator.Program shader, ByteBuffer payload, GpuBuffer vertices, int indicesCount,
                        GpuTextureView atlas, GpuTextureView noise, GpuSampler repeat, GpuTextureView shadowDepth,
                        GpuTextureView shadowOpaqueDepth, GpuTextureView shadowColor, GpuTextureView shadowShaftColor, List<ComplementaryPostCompileProbe.Pass> post,
                        TerrainCameraFrame camera, TerrainSceneUniforms scene, TerrainShadowFrame light, net.minecraft.core.SectionPos section, Runnable completed) {
@@ -34,71 +33,81 @@ final class ComplementaryTerrainDrawProbe {
         var color = new GpuTargets.Spec(TargetFormat.R11F_G11F_B10F, 1, 1, false, 0, 0, 0, 0);
         var material = new GpuTargets.Spec(TargetFormat.RGB8, 1, 1, false, 0, 0, 0, 1);
         var normal = new GpuTargets.Spec(TargetFormat.RGBA8_SNORM, 1, 1, false, 0, 0, 0, 0);
-        var readback = device.createBuffer(() -> "Complementary terrain witness", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ, SIZE * SIZE * 4L);
-        try (var uniforms = device.createBuffer(() -> "Complementary terrain scene", GpuBuffer.USAGE_UNIFORM, payload);
-             var targets = new GpuTargets(device, Map.of(0, color, 6, material, 4, normal), SIZE, SIZE, 1024 * 1024);
-             var depth = new GpuDepthTargets(device, SIZE, SIZE, 1024 * 1024);
-             var specular = device.createTexture("Vanilla block materials without custom emission",
-                     GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_TEXTURE_BINDING,
-                     GpuFormat.RGBA8_UNORM, 1, 1, 1, 1);
-             var specularView = device.createTextureView(specular);
-             var witness = witnessProgram();
-             var output = device.createTexture("Complementary terrain validation", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC,
-                     GpuFormat.RGBA8_UNORM, SIZE, SIZE, 1, 1);
-             var outputView = device.createTextureView(output)) {
-            var program = ComplementaryPreviewPipelines.get("terrain", () -> GpuProgram.withVertices(device, "complementary_gbuffers_terrain_draw", shader.vertex(), shader.fragment(),
-                     List.of(color.format(), material.format(), normal.format()), TerrainVertexData.FORMAT, PrimitiveTopology.QUADS,
-                     shader.samplers(), DepthStencilState.DEFAULT, List.of(TerrainShaderTranslator.UNIFORM_BLOCK)));
-            var known = Map.of("tex", atlas, "noisetex", noise, "specular", specularView,
-                    "shadowtex0", shadowDepth, "shadowtex1", shadowOpaqueDepth, "shadowcolor0", shadowColor);
-            var required = new TreeSet<>(((FrontendRenderPipeline) program.compiled()).uniformIndices().keySet());
-            required.remove(TerrainShaderTranslator.UNIFORM_BLOCK);
-            if (!known.keySet().containsAll(required)) {
-                throw new IllegalStateException("Unbound Complementary terrain samplers: " + required);
-            }
+        int width = resources.width(), height = resources.height();
+        var readback = device.createBuffer(() -> "Complementary terrain witness", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ, width * height * 4L);
+        try {
+            var targets = resources.get("terrain colors", GpuTargets.class,
+                    () -> new GpuTargets(device, Map.of(0, color, 6, material, 4, normal), width, height, 8L * 1024 * 1024));
+            var depth = resources.get("terrain depth", GpuDepthTargets.class,
+                    () -> new GpuDepthTargets(device, width, height, 8L * 1024 * 1024));
+            var specular = resources.get("specular", GpuTexture.class, () -> {
+                var texture = device.createTexture("Vanilla block materials without custom emission",
+                        GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_TEXTURE_BINDING,
+                        GpuFormat.RGBA8_UNORM, 1, 1, 1, 1);
+                device.createCommandEncoder().clearColorTexture(texture, new org.joml.Vector4f(0));
+                return texture;
+            });
+            var specularView = resources.get("specular view", GpuTextureView.class, () -> device.createTextureView(specular));
+            targets.clear(true);
+            depth.beginFrame();
+            try (var uniforms = device.createBuffer(() -> "Complementary terrain scene", GpuBuffer.USAGE_UNIFORM, payload);
+                 var witness = witnessProgram();
+                 var output = device.createTexture("Complementary terrain validation", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC,
+                     GpuFormat.RGBA8_UNORM, width, height, 1, 1);
+                 var outputView = device.createTextureView(output)) {
+                var program = ComplementaryPreviewPipelines.get("terrain", () -> GpuProgram.withVertices(device, "complementary_gbuffers_terrain_draw", shader.vertex(), shader.fragment(),
+                         List.of(color.format(), material.format(), normal.format()), TerrainVertexData.FORMAT, PrimitiveTopology.QUADS,
+                         shader.samplers(), DepthStencilState.DEFAULT, List.of(TerrainShaderTranslator.UNIFORM_BLOCK)));
+                var known = Map.of("tex", atlas, "noisetex", noise, "specular", specularView,
+                        "shadowtex0", shadowDepth, "shadowtex1", shadowOpaqueDepth, "shadowcolor0", shadowColor);
+                var required = new TreeSet<>(((FrontendRenderPipeline) program.compiled()).uniformIndices().keySet());
+                required.remove(TerrainShaderTranslator.UNIFORM_BLOCK);
+                if (!known.keySet().containsAll(required)) {
+                    throw new IllegalStateException("Unbound Complementary terrain samplers: " + required);
+                }
 
-            var encoder = device.createCommandEncoder();
-            encoder.clearColorTexture(specular, new org.joml.Vector4f(0));
-            var sceneDepth = depth.view(GpuDepthTargets.Stage.SCENE);
-            var passDescription = RenderPassDescriptor.builder(() -> "Complementary gbuffers_terrain draw")
-                    .withColorAttachment(targets.write(0)).withColorAttachment(targets.write(6)).withColorAttachment(targets.write(4))
-                    .withDepthAttachment(sceneDepth).build();
-            var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
-            var indexBuffer = indices.getBuffer(indicesCount);
-            try (var pass = encoder.createRenderPass(passDescription)) {
-                pass.setPipeline(program.compiled());
-                pass.setVertexBuffer(0, vertices.slice());
-                pass.setIndexBuffer(indexBuffer, indices.type());
-                pass.setUniform(TerrainShaderTranslator.UNIFORM_BLOCK, uniforms);
-                for (String name : required) {
-                    pass.setUniform(name, known.get(name), name.equals("noisetex") ? repeat : nearest);
-                }
-                pass.drawIndexed(indicesCount, 1, 0, 0, 0);
-            }
-            ComplementaryPostDrawProbe.submit(post, targets, sceneDepth, noise, repeat, camera, scene, light, section,
-                    Map.of("shadowtex0", shadowDepth, "shadowtex1", shadowOpaqueDepth,
-                            "shadowcolor0", shadowColor, "shadowcolor1", shadowShaftColor), verified);
-            MrtPass.draw(device, witness, List.of(outputView), Map.of("TerrainDepth", sceneDepth,
-                    "Color", targets.write(0), "Material", targets.write(6), "NormalData", targets.write(4)), nearest);
-            encoder.copyTextureToBuffer(output, readback, 0, () -> {
-                int colorCount = 0, materialCount = 0, normalCount = 0;
-                try (readback; var mapping = readback.map(true, false)) {
-                    var bytes = mapping.data();
-                    for (int i = 0; i < SIZE * SIZE * 4; i += 4) {
-                        if (bytes.get(i) != 0) colorCount++;
-                        if (bytes.get(i + 1) != 0) materialCount++;
-                        if (bytes.get(i + 2) != 0) normalCount++;
+                var encoder = device.createCommandEncoder();
+                var sceneDepth = depth.view(GpuDepthTargets.Stage.SCENE);
+                var passDescription = RenderPassDescriptor.builder(() -> "Complementary gbuffers_terrain draw")
+                        .withColorAttachment(targets.write(0)).withColorAttachment(targets.write(6)).withColorAttachment(targets.write(4))
+                        .withDepthAttachment(sceneDepth).build();
+                var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
+                var indexBuffer = indices.getBuffer(indicesCount);
+                try (var pass = encoder.createRenderPass(passDescription)) {
+                    pass.setPipeline(program.compiled());
+                    pass.setVertexBuffer(0, vertices.slice());
+                    pass.setIndexBuffer(indexBuffer, indices.type());
+                    pass.setUniform(TerrainShaderTranslator.UNIFORM_BLOCK, uniforms);
+                    for (String name : required) {
+                        pass.setUniform(name, known.get(name), name.equals("noisetex") ? repeat : nearest);
                     }
+                    pass.drawIndexed(indicesCount, 1, 0, 0, 0);
                 }
-                if (colorCount < 16 || materialCount < 16 || normalCount < 16) {
-                    throw new IllegalStateException("Complementary terrain outputs have insufficient coverage: "
-                            + colorCount + "/" + materialCount + "/" + normalCount);
-                }
-                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TERRAIN_DRAW_PASS: colortex0={}, colortex6={}, colortex4={}, samplers={}",
-                        colorCount, materialCount, normalCount, required);
-                verified.run();
-            }, 0);
-            encoder.submit();
+                ComplementaryPostDrawProbe.submit(resources, post, targets, sceneDepth, noise, repeat, camera, scene, light, section,
+                        Map.of("shadowtex0", shadowDepth, "shadowtex1", shadowOpaqueDepth,
+                                "shadowcolor0", shadowColor, "shadowcolor1", shadowShaftColor), verified);
+                MrtPass.draw(device, witness, List.of(outputView), Map.of("TerrainDepth", sceneDepth,
+                        "Color", targets.write(0), "Material", targets.write(6), "NormalData", targets.write(4)), nearest);
+                encoder.copyTextureToBuffer(output, readback, 0, () -> {
+                    int colorCount = 0, materialCount = 0, normalCount = 0;
+                    try (readback; var mapping = readback.map(true, false)) {
+                        var bytes = mapping.data();
+                        for (int i = 0; i < width * height * 4; i += 4) {
+                            if (bytes.get(i) != 0) colorCount++;
+                            if (bytes.get(i + 1) != 0) materialCount++;
+                            if (bytes.get(i + 2) != 0) normalCount++;
+                        }
+                    }
+                    if (colorCount < 16 || materialCount < 16 || normalCount < 16) {
+                        throw new IllegalStateException("Complementary terrain outputs have insufficient coverage: "
+                                + colorCount + "/" + materialCount + "/" + normalCount);
+                    }
+                    Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TERRAIN_DRAW_PASS: colortex0={}, colortex6={}, colortex4={}, samplers={}",
+                            colorCount, materialCount, normalCount, required);
+                    verified.run();
+                }, 0);
+                encoder.submit();
+            }
         } catch (RuntimeException failure) {
             readback.close();
             throw failure;

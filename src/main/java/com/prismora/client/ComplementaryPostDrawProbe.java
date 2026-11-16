@@ -25,7 +25,6 @@ final class ComplementaryPostDrawProbe {
             }
             """;
 
-    private static GpuTargets persistentTargets;
     private static TerrainCameraFrame previousPose;
     private static GpuTextureView previousHistory;
     private static int submissions;
@@ -33,16 +32,16 @@ final class ComplementaryPostDrawProbe {
     private ComplementaryPostDrawProbe() {}
 
     static void close() {
-        if (persistentTargets != null) {
-            persistentTargets.close();
-            persistentTargets = null;
-        }
         previousHistory = null;
         previousPose = null;
         submissions = 0;
     }
 
-    static void submit(List<ComplementaryPostCompileProbe.Pass> programs, GpuTargets terrain, GpuTextureView depth,
+    static void invalidateHistory() {
+        previousHistory = null;
+    }
+
+    static void submit(ComplementaryFrameResources resources, List<ComplementaryPostCompileProbe.Pass> programs, GpuTargets terrain, GpuTextureView depth,
                        GpuTextureView noise, GpuSampler repeat, TerrainCameraFrame camera, TerrainSceneUniforms scene,
                        TerrainShadowFrame light, net.minecraft.core.SectionPos section, Map<String, GpuTextureView> shadows,
                        Runnable completed) {
@@ -66,22 +65,20 @@ final class ComplementaryPostDrawProbe {
         specs.put(14, depthSpec);
         var readback = device.createBuffer(() -> "Complementary final pixels", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ,
                 (long) frameBytes * 2 + (long) historyBytes * 2);
-        if (persistentTargets == null) {
-            persistentTargets = new GpuTargets(device, specs, width, height, 4L * 1024 * 1024);
-        }
-        var buffers = persistentTargets;
+        var buffers = resources.get("post colors", GpuTargets.class,
+                () -> new GpuTargets(device, specs, width, height, 32L * 1024 * 1024));
         var lastPose = previousPose == null ? camera : previousPose;
         var lastHistory = previousHistory;
         int startingFrame = submissions * 2;
-        try (
-             var output = device.createTexture("Complementary final output",
-                     GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC, GpuFormat.RGBA8_UNORM, width, height, 1, 1);
-             var outputView = device.createTextureView(output);
-             var convertDepth = new GpuProgram(device, "complementary_legacy_depth", QUAD, HEADER + """
-                     uniform sampler2D NativeDepth;
-                     layout(location=0) out vec4 Converted;
-                     void main(){Converted=vec4(1.0-texelFetch(NativeDepth,ivec2(gl_FragCoord.xy),0).r);}
-                     """, List.of(GpuFormat.R32_FLOAT), List.of("NativeDepth"))) {
+        try {
+            var output = resources.get("final color", GpuTexture.class, () -> device.createTexture("Complementary final output",
+                    GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC, GpuFormat.RGBA8_UNORM, width, height, 1, 1));
+            var outputView = resources.get("final view", GpuTextureView.class, () -> device.createTextureView(output));
+            var convertDepth = ComplementaryPreviewPipelines.get("legacy depth", () -> new GpuProgram(device, "complementary_legacy_depth", QUAD, HEADER + """
+                    uniform sampler2D NativeDepth;
+                    layout(location=0) out vec4 Converted;
+                    void main(){Converted=vec4(1.0-texelFetch(NativeDepth,ivec2(gl_FragCoord.xy),0).r);}
+                    """, List.of(GpuFormat.R32_FLOAT), List.of("NativeDepth")));
             MrtPass.draw(device, convertDepth, List.of(buffers.write(14)), Map.of("NativeDepth", depth), nearest);
             var legacyDepth = buffers.write(14);
             GpuTextureView firstHistory = null;

@@ -53,7 +53,7 @@ public final class ComplementaryPresentProbe {
         }
         if (retained != null && (retained.getWidth(0) != width || retained.getHeight(0) != height
                 || retained.getFormat() != output.getFormat())) {
-            throw new IllegalStateException("Complementary probe dimensions changed");
+            releasePreview();
         }
         checked = false;
         matched = false;
@@ -171,11 +171,17 @@ public final class ComplementaryPresentProbe {
     }
 
     static void close() {
-        previousPixels = null;
+        releasePreview();
+        generation = 0;
+        checked = matched = captured = false;
         if (blit != null) {
             blit.close();
             blit = null;
         }
+    }
+
+    private static void releasePreview() {
+        previousPixels = null;
         if (preview != null) {
             preview.close();
             preview = null;

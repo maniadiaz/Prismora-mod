@@ -91,6 +91,10 @@ public final class TerrainSmokeProbe {
     private record SectionMesh(SectionPos section, List<TerrainVertexData> faces) {}
     private static Map<SectionPos, List<TerrainVertexData>> previewSections = Map.of();
     private static int meshUpdates;
+    private static ComplementaryFrameResources firstFrameResources;
+    private static int firstResourceCount;
+    private static int firstPipelineCount;
+    private static boolean closingWorld;
     private enum EditCheck { PLACE, BREAK, UNLOAD, LOAD, DONE }
     private static EditCheck editCheck;
     private static BlockPos editBlock;
@@ -111,6 +115,22 @@ public final class TerrainSmokeProbe {
             return;
         }
         var client = Minecraft.getInstance();
+        if (closingWorld && client.level == null) {
+            closeComplementaryWorld();
+            if (ComplementaryFrameResources.active() || firstFrameResources.size() != 0
+                    || ComplementaryPreviewPipelines.size() != 0 || previewMesh != null || cameraFrame != null
+                    || ComplementaryPresentProbe.generation() != 0) {
+                throw new IllegalStateException("Complementary retained resources after closing the world");
+            }
+            firstFrameResources = null;
+            finished = true;
+            Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_WORLD_RELEASE_PASS: frame resources, pipelines, mesh and camera state released");
+            client.stop();
+            return;
+        }
+        if (closingWorld) {
+            return;
+        }
         if (++ticks > 1000) {
             throw new IllegalStateException("Terrain MRT probe timed out after " + readbacks + " GPU reads; pending=" + pending + ", visible sections submitted=" + previewSections.keySet() + ", section lifecycle=" + editCheck + ", MRT pixels=" + verifiedPixels);
         }
@@ -169,21 +189,32 @@ public final class TerrainSmokeProbe {
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_LIVE_SEQUENCE_PASS: {} poses presented with {} reused real pipelines",
                         PREVIEW_YAW.size(), ComplementaryPreviewPipelines.size());
             }
-            finished = true;
-            ComplementaryPresentProbe.close();
-            ComplementaryPreviewPipelines.close();
-            ComplementaryPostDrawProbe.close();
-            updatePreviewMesh(Map.of());
-            editedMesh = null;
-            facesBeforeEdit = null;
             readback.close();
             depth.close();
             colors.close();
             pipelines.values().forEach(CompiledRenderPipeline::close);
             pipelines.clear();
             Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MRT_PASS: {} matching pixels from real chunk draws", verifiedPixels);
-            client.stop();
+            if (PACK_FILE.isEmpty()) {
+                finished = true;
+                client.stop();
+                return;
+            }
+            closingWorld = true;
+            client.disconnect(new TitleScreen(), false);
         }
+    }
+
+    static void closeComplementaryWorld() {
+        ComplementaryPresentProbe.close();
+        ComplementaryPreviewPipelines.close();
+        ComplementaryPostDrawProbe.close();
+        ComplementaryFrameResources.release();
+        updatePreviewMesh(Map.of());
+        editedMesh = null;
+        facesBeforeEdit = null;
+        cameraFrame = null;
+        captureStarted = false;
     }
 
     private static void advancePreview(Minecraft client) {
@@ -194,6 +225,9 @@ public final class TerrainSmokeProbe {
         requestedPose = presented;
         poseRendering = false;
         poseVerified = false;
+        if (requestedPose == 2) {
+            client.getWindow().setWindowed(800, 450);
+        }
         client.player.connection.sendCommand("tp @s " + PREVIEW_X.get(requestedPose) + " 76 70.5 " + PREVIEW_YAW.get(requestedPose) + " 75");
     }
 
@@ -215,6 +249,11 @@ public final class TerrainSmokeProbe {
                 || Math.abs(cameraFrame.position().x - PREVIEW_X.get(requestedPose)) > 0.1) {
             return;
         }
+        var target = client.gameRenderer.mainRenderTarget();
+        if (requestedPose == 2 && (target.width != 800 || target.height != 450)) {
+            return;
+        }
+        var resources = ComplementaryFrameResources.forTarget(target);
         var sample = previewScene;
         poseRendering = true;
         Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_MULTISECTION_PASS: {} sections, {} faces submitted together",
@@ -227,8 +266,26 @@ public final class TerrainSmokeProbe {
             TerrainUniformSmokeProbe.submit(packPrograms.terrain(), cameraFrame, sample.section(), () -> uniformsVerified = true);
             ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
         }
-        ComplementaryShadowSmokeProbe.submit(packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
+        ComplementaryShadowSmokeProbe.submit(resources, packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
                 sample.section(), packPrograms.terrain(), packPrograms.post(), () -> poseVerified = true);
+        if (requestedPose == 0) {
+            firstFrameResources = resources;
+            firstResourceCount = resources.size();
+            firstPipelineCount = ComplementaryPreviewPipelines.size();
+        } else if (requestedPose == 1) {
+            if (resources != firstFrameResources || resources.size() != firstResourceCount
+                    || ComplementaryPreviewPipelines.size() != firstPipelineCount) {
+                throw new IllegalStateException("Complementary allocated new frame resources at the same size");
+            }
+            Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_FRAME_REUSE_PASS: {} resources and {} pipelines reused", firstResourceCount, firstPipelineCount);
+        } else {
+            if (resources == firstFrameResources || firstFrameResources.size() != 0
+                    || resources.width() != 160 || resources.height() != 90
+                    || ComplementaryPreviewPipelines.size() != firstPipelineCount) {
+                throw new IllegalStateException("Complementary did not rebuild attachments and retain pipelines after resize");
+            }
+            Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_FRAME_RESIZE_PASS: {}x{} attachments, pipelines retained", resources.width(), resources.height());
+        }
         Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_WORLD_FRAME_PASS: pose {} submitted shadow, terrain and post from renderLevel", requestedPose + 1);
     }
     public static void captureCamera(Matrix4fc projection) {
