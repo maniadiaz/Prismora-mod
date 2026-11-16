@@ -15,17 +15,19 @@ import com.prismora.Prismora;
 import com.prismora.render.runtime.GpuDepthTargets;
 import com.prismora.render.runtime.GpuTargets;
 import com.prismora.render.runtime.TerrainVertexData;
+import com.prismora.render.runtime.TerrainSectionGeometry;
+import net.minecraft.client.renderer.chunk.SectionCompiler;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayList;
 import java.util.List;
 
 import net.minecraft.core.SectionPos;
+import net.minecraft.core.BlockPos;
 import com.prismora.render.runtime.TerrainCameraFrame;
 import org.joml.Matrix4fc;
 import java.util.Map;
@@ -87,15 +89,18 @@ public final class TerrainSmokeProbe {
     private static volatile boolean shadowsVerified;
     private static TerrainPackCompileProbe.Programs packPrograms;
     private record SectionMesh(SectionPos section, List<TerrainVertexData> faces) {}
-    private static final Map<SectionPos, List<TerrainVertexData>> captured = new ConcurrentHashMap<>();
     private static Map<SectionPos, List<TerrainVertexData>> previewSections = Map.of();
     private static int meshUpdates;
+    private enum EditCheck { PLACE, BREAK, UNLOAD, LOAD, DONE }
+    private static EditCheck editCheck;
+    private static BlockPos editBlock;
+    private static TerrainSectionGeometry editedMesh;
+    private static List<TerrainVertexData> facesBeforeEdit;
     private static SectionMesh previewScene;
 
-    private static final ThreadLocal<SectionMesh> building = new ThreadLocal<>();
+    private static final ThreadLocal<List<TerrainVertexData>> building = new ThreadLocal<>();
     private static final SectionPos PRESENT_SECTION = SectionPos.of(-33, 4, 4);
     private static final List<Integer> PREVIEW_YAW = List.of(0, 14, 28);
-    private static final int PREVIEW_RADIUS = 1;
     private static final List<Double> PREVIEW_X = List.of(-526.5, -528.5, -530.5);
     private static final String PACK_FILE = System.getProperty("prismora.terrainPack", "");
 
@@ -107,7 +112,7 @@ public final class TerrainSmokeProbe {
         }
         var client = Minecraft.getInstance();
         if (++ticks > 1000) {
-            throw new IllegalStateException("Terrain MRT probe timed out after " + readbacks + " GPU reads; pending=" + pending + ", visible section captured=" + captured.keySet() + ", MRT pixels=" + verifiedPixels);
+            throw new IllegalStateException("Terrain MRT probe timed out after " + readbacks + " GPU reads; pending=" + pending + ", visible sections submitted=" + previewSections.keySet() + ", section lifecycle=" + editCheck + ", MRT pixels=" + verifiedPixels);
         }
         if (!openingWorld && ticks > 60 && client.isGameLoadFinished() && client.gui.overlay() == null) {
             openingWorld = true;
@@ -130,6 +135,7 @@ public final class TerrainSmokeProbe {
                 if (dry != 10009 || wet != 10011) {
                     throw new IllegalStateException("Complementary oak leaf IDs differ: dry=" + dry + ", wet=" + wet);
                 }
+                client.options.renderDistance().set(3);
                 client.getWindow().setWindowed(960, 540);
                 client.player.connection.sendCommand("gamemode spectator");
                 client.player.connection.sendCommand("tp @s -526.5 76 70.5 0 75");
@@ -149,16 +155,15 @@ public final class TerrainSmokeProbe {
         if (vertexVerified && ComplementaryPresentProbe.verified()) {
             advancePreview(client);
         }
-        var sample = previewScene;
-        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified && shadowsVerified && ComplementaryPresentProbe.verified() && ComplementaryPresentProbe.generation() == PREVIEW_YAW.size() && poseVerified))) {
+        if (requestedPose == PREVIEW_YAW.size() - 1 && poseVerified && ComplementaryPresentProbe.verified()) {
+            verifySectionLifecycle(client);
+        }
+        if (verifiedPixels > 0 && (PACK_FILE.isEmpty() || (vertexVerified && uniformsVerified && shadowsVerified && ComplementaryPresentProbe.verified() && ComplementaryPresentProbe.generation() == PREVIEW_YAW.size() && editCheck == EditCheck.DONE))) {
             if (materials != null) {
-                Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MATERIAL_PASS: {} states mapped; section {} contains {} block-model faces; oak leaves 10009/10011",
-                        materials.size(), sample.section(), sample.faces().size());
-                materials = null;
+                Prismora.LOGGER.info("PRISMORA_WORLD_TERRAIN_MATERIAL_PASS: {} states mapped; oak leaves 10009/10011", materials.size());
+                captureStarted = false;
             }
             if (!PACK_FILE.isEmpty()) {
-                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_MULTISECTION_PASS: {} sections, {} faces submitted together",
-                        previewSections.size(), previewScene.faces().size());
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_VISIBLE_TERRAIN_PASS: {} poses crossed a section boundary; {} visible mesh uploads",
                         PREVIEW_X.size(), meshUpdates);
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_LIVE_SEQUENCE_PASS: {} poses presented with {} reused real pipelines",
@@ -168,7 +173,9 @@ public final class TerrainSmokeProbe {
             ComplementaryPresentProbe.close();
             ComplementaryPreviewPipelines.close();
             ComplementaryPostDrawProbe.close();
-            if (previewMesh != null) previewMesh.close();
+            updatePreviewMesh(Map.of());
+            editedMesh = null;
+            facesBeforeEdit = null;
             readback.close();
             depth.close();
             colors.close();
@@ -192,8 +199,15 @@ public final class TerrainSmokeProbe {
 
     public static void renderComplementaryFrame() {
         var client = Minecraft.getInstance();
-        if (finished || !captureStarted || worldTicks <= 40 || cameraFrame == null || poseRendering
+        if (finished || !captureStarted || worldTicks <= 40 || cameraFrame == null
                 || client.player == null || client.gui.overlay() != null || client.gui.screen() != null) {
+            return;
+        }
+        var visible = visibleTerrain(client);
+        if (vertexSubmitted || visible.size() >= 2) {
+            updatePreviewMesh(visible);
+        }
+        if (poseRendering || visible.size() < 2) {
             return;
         }
         var state = client.gameRenderer.gameRenderState().levelRenderState;
@@ -201,13 +215,10 @@ public final class TerrainSmokeProbe {
                 || Math.abs(cameraFrame.position().x - PREVIEW_X.get(requestedPose)) > 0.1) {
             return;
         }
-        var visible = visibleTerrain(client);
-        if (visible.size() < 2) {
-            return;
-        }
-        updatePreviewMesh(visible);
         var sample = previewScene;
         poseRendering = true;
+        Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_MULTISECTION_PASS: {} sections, {} faces submitted together",
+                previewSections.size(), sample.faces().size());
         var sky = state.skyRenderState;
         var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle, new org.joml.Vector3f(8, 8, 8), 40f);
         if (!vertexSubmitted) {
@@ -227,13 +238,89 @@ public final class TerrainSmokeProbe {
         }
     }
 
+    private static TerrainSectionGeometry visibleMesh(Minecraft client, SectionPos position) {
+        for (var section : client.levelRenderer.visibleSections()) {
+            if (section.getSectionNode() == position.asLong()
+                    && section.getSectionMesh() instanceof TerrainSectionGeometry mesh) {
+                return mesh;
+            }
+        }
+        return null;
+    }
+
+    private static void verifySectionLifecycle(Minecraft client) {
+        if (editCheck == EditCheck.DONE) {
+            return;
+        }
+        if (editCheck == null) {
+            var mesh = visibleMesh(client, PRESENT_SECTION);
+            if (mesh == null || mesh.prismora$faces().isEmpty()) {
+                return;
+            }
+            for (int y = 78; y >= 64; y--) {
+                var position = new BlockPos(-526, y, 70);
+                if (client.level.getBlockState(position).isAir()) {
+                    editBlock = position;
+                    editedMesh = mesh;
+                    facesBeforeEdit = mesh.prismora$faces();
+                    setTestBlock(client, "minecraft:gold_block");
+                    editCheck = EditCheck.PLACE;
+                    return;
+                }
+            }
+            throw new IllegalStateException("No air block in the terrain edit fixture");
+        }
+        if (editCheck == EditCheck.LOAD) {
+            int destinationSection = SectionPos.blockToSectionCoord(-720);
+            if (previewSections.keySet().stream().anyMatch(section -> section.x() == destinationSection)) {
+                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SECTION_LOAD_PASS: newly loaded section joined the visible mesh");
+                editCheck = EditCheck.DONE;
+            }
+            return;
+        }
+        if (editCheck == EditCheck.UNLOAD) {
+            if (!client.level.getChunkSource().hasChunk(PRESENT_SECTION.x(), PRESENT_SECTION.z())
+                    && editedMesh.prismora$faces().isEmpty() && !previewSections.containsKey(PRESENT_SECTION)) {
+                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SECTION_UNLOAD_PASS: unloaded geometry released and removed from the visible mesh");
+                editCheck = EditCheck.LOAD;
+            }
+            return;
+        }
+        var mesh = visibleMesh(client, PRESENT_SECTION);
+        var faces = previewSections.get(PRESENT_SECTION);
+        if (mesh == null || mesh == editedMesh || !editedMesh.prismora$faces().isEmpty() || faces == null
+                || faces != mesh.prismora$faces()) {
+            return;
+        }
+        var block = client.level.getBlockState(editBlock);
+        if (editCheck == EditCheck.PLACE && block.is(Blocks.GOLD_BLOCK) && !faces.equals(facesBeforeEdit)) {
+            Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SECTION_PLACE_PASS: placed block replaced geometry in the visible mesh");
+            editedMesh = mesh;
+            facesBeforeEdit = faces;
+            setTestBlock(client, "minecraft:air");
+            editCheck = EditCheck.BREAK;
+        } else if (editCheck == EditCheck.BREAK && block.isAir() && !faces.equals(facesBeforeEdit)) {
+            Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_SECTION_BREAK_PASS: removed block replaced geometry in the visible mesh");
+            editedMesh = mesh;
+            facesBeforeEdit = null;
+            client.player.connection.sendCommand("tp @s -720 90 70.5 28 75");
+            editCheck = EditCheck.UNLOAD;
+        }
+    }
+
+    private static void setTestBlock(Minecraft client, String block) {
+        client.player.connection.sendCommand("setblock " + editBlock.getX() + " " + editBlock.getY() + " " + editBlock.getZ() + " " + block);
+    }
+
     private static Map<SectionPos, List<TerrainVertexData>> visibleTerrain(Minecraft client) {
         var visible = new LinkedHashMap<SectionPos, List<TerrainVertexData>>();
         for (var renderSection : client.levelRenderer.visibleSections()) {
             var section = SectionPos.of(renderSection.getSectionNode());
-            var faces = captured.get(section);
-            if (faces != null && !faces.isEmpty()) {
-                visible.put(section, faces);
+            if (renderSection.getSectionMesh() instanceof TerrainSectionGeometry geometry) {
+                var faces = geometry.prismora$faces();
+                if (!faces.isEmpty()) {
+                    visible.put(section, faces);
+                }
             }
         }
         return visible;
@@ -241,6 +328,7 @@ public final class TerrainSmokeProbe {
 
     private static void updatePreviewMesh(Map<SectionPos, List<TerrainVertexData>> visible) {
         if (visible.equals(previewSections)) {
+            previewSections = visible;
             return;
         }
         var anchor = PRESENT_SECTION.origin();
@@ -251,7 +339,7 @@ public final class TerrainSmokeProbe {
                 faces.add(face.offset(origin.getX() - anchor.getX(), origin.getY() - anchor.getY(), origin.getZ() - anchor.getZ()));
             }
         }
-        var replacement = TerrainVertexSmokeProbe.upload(faces);
+        var replacement = faces.isEmpty() ? null : TerrainVertexSmokeProbe.upload(faces);
         if (previewMesh != null) {
             previewMesh.close();
         }
@@ -261,38 +349,30 @@ public final class TerrainSmokeProbe {
         meshUpdates++;
     }
 
-    private static boolean insidePreview(SectionPos section) {
-        return Math.abs(section.x() - PRESENT_SECTION.x()) <= PREVIEW_RADIUS
-                && Math.abs(section.y() - PRESENT_SECTION.y()) <= PREVIEW_RADIUS
-                && Math.abs(section.z() - PRESENT_SECTION.z()) <= PREVIEW_RADIUS;
-    }
-    public static void beginSection(SectionPos section) {
-        if (captureStarted && materials != null && insidePreview(section)) {
-            building.set(new SectionMesh(section, new ArrayList<>()));
+    public static void beginSection() {
+        building.remove();
+        if (captureStarted && materials != null) {
+            building.set(new ArrayList<>());
         }
     }
 
     public static boolean capturingSection() {
-        return materials != null && building.get() != null;
+        return building.get() != null;
     }
 
-    public static void endSection() {
-        var result = building.get();
-        if (result == null) {
-            return;
-        }
+    public static void endSection(SectionCompiler.Results results) {
+        var faces = building.get();
         building.remove();
-        if (captured.put(result.section(), List.copyOf(result.faces())) == null && !result.faces().isEmpty()) {
-            Prismora.LOGGER.info("Prismora camera terrain section {} captured with {} faces", result.section(), result.faces().size());
+        if (faces != null) {
+            ((TerrainSectionGeometry) (Object) results).prismora$setFaces(List.copyOf(faces));
         }
     }
-
     public static int materialId(BlockState state) {
         return materials.id(state);
     }
 
     public static void recordMaterial(int id, float x, float y, float z, BakedQuad quad, QuadInstance instance) {
-        var faces = building.get().faces();
+        var faces = building.get();
         if (faces.size() >= 65_536) {
             throw new IllegalStateException("Section exceeds the terrain probe's face budget");
         }

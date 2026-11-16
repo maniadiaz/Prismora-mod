@@ -8,7 +8,7 @@
 "E06","Agua transparencias cielo y profundidades","Pendiente","E04;E05","A y B","Transparencia y profundidades de etapas distintas correctas","",""
 "E07","Sombras de sol y luna","En curso: shadow del pack genera mapas que consume el terreno real de una seccion; casters fuera de camara y transparencias pendientes","E04;E05;E06","A y B","Sombras de objetos fuera de camara y cutouts correctas","Test-PackagedClient.ps1 -Probe terrain",""
 "E08","Uniforms texturas e historia temporal","Parcial: base disponible; cierre Complementary pendiente","E06","A y B","Uniforms reales e historia coherente sin NaN","",""
-"E09","Frame completo y primera entrega utilizable","En curso: shadow gbuffers_terrain y posprocesado desde renderLevel en modo diagnostico con historial persistente; terreno visible continuo mipmaps y activacion pendientes","E07;E08;E10 si base lo exige","A y B","Complementary real jugable 30 minutos por backend en tres dimensiones","",""
+"E09","Frame completo y primera entrega utilizable","En curso: modo diagnostico con sombra terreno y posprocesado; ciclo de carga edicion y descarga ligado a las mallas de Minecraft; render continuo y activacion pendientes","E07;E08;E10 si base lo exige","A y B","Complementary real jugable 30 minutos por backend en tres dimensiones","",""
 "E10","Compute imagenes y SSBO","Pendiente","E02;E03;E08","B; A si requerido por configuracion base","Resultados compute y sincronizacion comprobados en GPU","",""
 "E11","Perfiles opciones y efectos completos","Pendiente","E09;E10","B","Valores admitidos y ramas de capacidades cubiertos con evidencia","",""
 "E12","Integraciones externas aplicables","Pendiente","E11","B","Cada combinacion externa certificada o pendiente identificada","",""

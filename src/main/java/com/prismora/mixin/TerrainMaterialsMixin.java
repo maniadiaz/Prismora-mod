@@ -24,13 +24,13 @@ abstract class TerrainMaterialsMixin {
     @Inject(method = "compile", at = @At("HEAD"))
     private void prismora$beginSection(SectionPos section, RenderSectionRegion region, VertexSorting sorting,
                                       SectionBufferBuilderPack pack, CallbackInfoReturnable<SectionCompiler.Results> callback) {
-        TerrainSmokeProbe.beginSection(section);
+        TerrainSmokeProbe.beginSection();
     }
 
     @Inject(method = "compile", at = @At("RETURN"))
     private void prismora$endSection(SectionPos section, RenderSectionRegion region, VertexSorting sorting,
                                     SectionBufferBuilderPack pack, CallbackInfoReturnable<SectionCompiler.Results> callback) {
-        TerrainSmokeProbe.endSection();
+        TerrainSmokeProbe.endSection(callback.getReturnValue());
     }
     @Redirect(method = "compile", at = @At(value = "INVOKE", target =
             "Lnet/minecraft/client/renderer/block/ModelBlockRenderer;tesselateBlock(Lnet/minecraft/client/renderer/block/BlockQuadOutput;FFFLnet/minecraft/client/renderer/block/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/client/renderer/block/dispatch/BlockStateModel;JLnet/minecraftforge/client/model/data/ModelData;)V"))
