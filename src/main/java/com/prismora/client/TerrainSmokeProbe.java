@@ -109,7 +109,7 @@ public final class TerrainSmokeProbe {
     }
 
     static int runtimeFrames() {
-        return runtimeFrames;
+        return runtimeWorld == Minecraft.getInstance().level ? runtimeFrames : 0;
     }
 
     static void enableRuntime(TerrainPackCompileProbe.Programs programs, BlockMaterials blockMaterials) {
@@ -134,6 +134,7 @@ public final class TerrainSmokeProbe {
         if (client.level != null && (client.gui.screen() != null || client.gui.overlay() != null)) return;
         closeComplementaryWorld();
         runtimeWorld = client.level;
+        runtimeFrames = 0;
         if (runtimeWorld != null) {
             captureStarted = true;
             client.levelRenderer.invalidateCompiledGeometry(client.level, client.options, client.gameRenderer.mainCamera(), client.getBlockColors());

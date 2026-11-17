@@ -132,3 +132,28 @@ La prueba del JAR pulsa los botones del menú en un mundo, espera frames renderi
 ## Restaurar el pack y sus ajustes al iniciar Minecraft
 
 Prismora carga la selección guardada al iniciar el cliente y usa las opciones guardadas del pack para compilar los programas de Complementary y cargar su mapa de materiales. La prueba ejecuta dos procesos de Minecraft por backend con la misma carpeta de configuración. En el primero selecciona Complementary y guarda T_SATURATION=0.50 por la ruta de Aplicar. En el segundo abre un mundo sin tocar el menú y comprueba que vuelve a renderizar con el pack y que el programa de posprocesado contiene el valor guardado.
+
+## Validación de la versión jugable
+
+La prueba empaquetada playthrough abre un mundo aislado, activa Complementary, aplica T_SATURATION=0.50 con el botón del menú y recorre dos puntos de cada dimensión. El cronómetro de cada tramo empieza cuando Prismora ya ha dibujado con los programas del mundo activo. Durante el tramo se comprueba el avance de los frames, y al final se cierra y reabre el mismo mundo y se verifica el ajuste. Con la duración predeterminada se exigen diez minutos renderizados en Overworld, diez en Nether y diez en End.
+
+Ejecutar en PowerShell desde el repositorio con el ZIP local:
+
+```powershell
+.\scripts\Test-PackagedClient.ps1 -Backend opengl -Probe playthrough -ComplementaryPack $pack -FreshWorld
+.\scripts\Test-PackagedClient.ps1 -Backend vulkan -Probe playthrough -ComplementaryPack $pack -FreshWorld
+```
+
+## Referencias para el desarrollo de Prismora
+
+El objetivo sigue siendo Prismora para Minecraft Java 26.3 con Forge 66.1.0, OpenGL y Vulkan. Complementary Reimagined r5.9.3 es el pack de referencia para verificar cambios.
+
+1. Tomar Oculus como referencia para el contrato de shaderpacks. Comparar la selección de programas por dimensión, el orden de pasadas, los snapshots de profundidad, los mipmaps y la aplicación de opciones. Traducir las diferencias a cambios verificables en el renderizador de Prismora.
+
+   [Oculus](https://github.com/Asek3/Oculus)
+
+2. Tomar Embeddium como referencia para el rendimiento del terreno. Medir las reconstrucciones de malla y los bytes subidos a GPU con cámara fija, movimiento entre chunks y edición de un bloque. Usar ese resultado para priorizar la reutilización por sección y reducir las subidas completas del terreno visible. Verificar que el orden de transparencias se conserva.
+
+   [Embeddium](https://github.com/FiniteReality/embeddium)
+
+3. Cerrar la validación de 30 minutos por backend en las tres dimensiones antes de usarla como referencia de estabilidad. Para medir las optimizaciones, comparar los tiempos de frame en la misma escena, resolución y hardware. Los 30 FPS en gama de entrada requieren una medición en un equipo representativo.

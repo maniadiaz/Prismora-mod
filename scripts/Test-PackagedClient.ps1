@@ -1,4 +1,4 @@
-param([ValidateSet('opengl','vulkan')][string]$Backend='opengl',[ValidateSet('regression','performance','legacy','mrt','terrain','menu','restore')][string]$Probe='regression',[string]$AdditionalModsDirectory='',[string]$ComplementaryPack='',[switch]$FreshWorld)
+param([ValidateSet('opengl','vulkan')][string]$Backend='opengl',[ValidateSet('regression','performance','legacy','mrt','terrain','menu','restore','playthrough')][string]$Probe='regression',[string]$AdditionalModsDirectory='',[string]$ComplementaryPack='',[switch]$FreshWorld,[ValidateRange(30,86400)][int]$PlaythroughSeconds=1800)
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $projectRoot
@@ -8,7 +8,7 @@ try {
     $isolated=Join-Path $projectRoot '.gradle/packaged-smoke'
     $packPath=''
     if($ComplementaryPack){
-        if($Probe -notin @('terrain','menu','restore')){throw '-ComplementaryPack requires -Probe terrain, menu or restore'}
+        if($Probe -notin @('terrain','menu','restore','playthrough')){throw '-ComplementaryPack requires -Probe terrain, menu, restore, or playthrough'}
         $packPath=(Resolve-Path -LiteralPath $ComplementaryPack).Path
     }
     $additionalMods=@()
@@ -20,10 +20,10 @@ try {
         $digest=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($inventoryJson))).Substring(0,12)
         $isolated=Join-Path $projectRoot ".gradle/packaged-compat-$digest"
     }
-    if($Probe -in @('terrain','menu','restore')){$isolated += "-$Probe-$Backend"}
+    if($Probe -in @('terrain','menu','restore','playthrough')){$isolated += "-$Probe-$Backend"}
     New-Item -ItemType Directory -Force (Join-Path $isolated 'run/mods'),(Join-Path $isolated 'run/shaderpacks') | Out-Null
-    if($Probe -in @('menu','restore')){
-        if(-not $packPath){throw 'Complementary menu and restart verification require -ComplementaryPack'}
+    if($Probe -in @('menu','restore','playthrough')){
+        if(-not $packPath){throw 'Complementary verification requires -ComplementaryPack'}
         Copy-Item -LiteralPath $packPath -Destination (Join-Path $isolated 'run/shaderpacks') -Force
     }
     if($additionalMods.Count){
@@ -45,6 +45,8 @@ minecraft {
             systemProperty 'prismora.smokeFreshWorld', providers.gradleProperty('prismoraFreshWorld').getOrElse('false')
             systemProperty 'prismora.terrainPack', providers.gradleProperty('prismoraTerrainPack').getOrElse('')
             systemProperty 'prismora.complementaryMenuSmoke', providers.gradleProperty('prismoraProbe').map { it in ['menu','restore'] }.getOrElse('false')
+            systemProperty 'prismora.complementaryPlaythrough', providers.gradleProperty('prismoraProbe').map { it == 'playthrough' }.getOrElse('false')
+            systemProperty 'prismora.playthroughSeconds', providers.gradleProperty('prismoraPlaythroughSeconds').getOrElse('1800')
             systemProperty 'prismora.complementaryRestorePhase', providers.gradleProperty('prismoraRestorePhase').getOrElse('')
             systemProperty 'prismora.terrainSmoke', providers.gradleProperty('prismoraProbe').map { it == 'terrain' }.getOrElse('false')
             systemProperty 'prismora.mrtSmoke', providers.gradleProperty('prismoraProbe').map { it == 'mrt' }.getOrElse('false')
@@ -87,10 +89,10 @@ dependencies { implementation minecraft.dependency('net.minecraftforge:forge:26.
         Write-Output "Packaged Prismora JAR restart verified on $Backend"
         return
     }
-    & .\gradlew.bat -p $isolated runClient "-PprismoraProbe=$Probe" "-PprismoraTerrainPack=$packPath" "-PprismoraFreshWorld=$($FreshWorld.IsPresent -or [bool]$additionalMods.Count)" --console=plain
+    & .\gradlew.bat -p $isolated runClient "-PprismoraProbe=$Probe" "-PprismoraPlaythroughSeconds=$PlaythroughSeconds" "-PprismoraTerrainPack=$packPath" "-PprismoraFreshWorld=$($FreshWorld.IsPresent -or [bool]$additionalMods.Count)" --console=plain
     if($LASTEXITCODE -ne 0){throw 'Packaged client failed'}
     $log=Get-Content -Raw -LiteralPath (Join-Path $isolated 'run/logs/latest.log')
-    $markers=if($Probe -in @('menu','restore')){@('PRISMORA_COMPLEMENTARY_MENU_ENABLE_PASS','PRISMORA_COMPLEMENTARY_MENU_TRANSLUCENT_DEPTH_PASS','PRISMORA_COMPLEMENTARY_MENU_ENTITIES_DEPTH_PASS','PRISMORA_COMPLEMENTARY_MENU_ENTITIES_SHADOW_PASS','PRISMORA_COMPLEMENTARY_MENU_HAND_DEPTH_PASS','PRISMORA_COMPLEMENTARY_MENU_PARTICLES_PASS','PRISMORA_COMPLEMENTARY_MENU_DISABLE_PASS','PRISMORA_COMPLEMENTARY_MENU_SWITCH_PASS')}elseif($Probe -eq 'terrain'){@('PRISMORA_WORLD_TERRAIN_MRT_PASS')}elseif($Probe -eq 'mrt'){@('PRISMORA_MRT_HDR_SNORM_PINGPONG_PASS','PRISMORA_MRT_PERSISTENCE_CLEAR_PASS','PRISMORA_MRT_RESIZE_TRANSACTION_PASS','PRISMORA_MRT_FORMATS_PASS','PRISMORA_MRT_DEPTH_SNAPSHOTS_PASS','PRISMORA_MRT_SMOKE_PASS')}elseif($Probe -eq 'legacy'){@('PRISMORA_LEGACY_GPU_PASS','PRISMORA_LEGACY_DEPTH_PASS','PRISMORA_LEGACY_MATRICES_PASS','PRISMORA_LEGACY_OPTIONS_PASS','PRISMORA_LEGACY_SOURCE_ERROR_PASS','PRISMORA_LEGACY_NETHER_PASS','PRISMORA_LEGACY_DIMENSION_PASS','PRISMORA_LEGACY_RENDER_SMOKE_PASS')}elseif($Probe -eq 'performance'){@('PRISMORA_SCALED_TARGETS_PASS','PRISMORA_ENTRY_PROFILE_PASS','PRISMORA_PERFORMANCE_SMOKE_PASS','PRISMORA_ADAPTIVE_FALLBACK_PASS','PRISMORA_OPTION_WIDGETS_PASS','PRISMORA_PROFILE_BENCHMARK_PASS')}else{@('PRISMORA_GPU_PASS','PRISMORA_RENDER_SMOKE_PASS','PRISMORA_ERROR_RECOVERY_PASS','PRISMORA_BLOOM_PASS','PRISMORA_OPTIONS_PASS','PRISMORA_HOT_RELOAD_PASS','PRISMORA_RESTORE_PASS','PRISMORA_RESIZE_PASS')}
+    $markers=if($Probe -eq 'playthrough'){@('PRISMORA_PLAYTHROUGH_REOPEN_PASS')}elseif($Probe -eq 'menu'){@('PRISMORA_COMPLEMENTARY_MENU_ENABLE_PASS','PRISMORA_COMPLEMENTARY_MENU_TRANSLUCENT_DEPTH_PASS','PRISMORA_COMPLEMENTARY_MENU_ENTITIES_DEPTH_PASS','PRISMORA_COMPLEMENTARY_MENU_ENTITIES_SHADOW_PASS','PRISMORA_COMPLEMENTARY_MENU_HAND_DEPTH_PASS','PRISMORA_COMPLEMENTARY_MENU_PARTICLES_PASS','PRISMORA_COMPLEMENTARY_MENU_DISABLE_PASS','PRISMORA_COMPLEMENTARY_MENU_SWITCH_PASS')}elseif($Probe -eq 'terrain'){@('PRISMORA_WORLD_TERRAIN_MRT_PASS')}elseif($Probe -eq 'mrt'){@('PRISMORA_MRT_HDR_SNORM_PINGPONG_PASS','PRISMORA_MRT_PERSISTENCE_CLEAR_PASS','PRISMORA_MRT_RESIZE_TRANSACTION_PASS','PRISMORA_MRT_FORMATS_PASS','PRISMORA_MRT_DEPTH_SNAPSHOTS_PASS','PRISMORA_MRT_SMOKE_PASS')}elseif($Probe -eq 'legacy'){@('PRISMORA_LEGACY_GPU_PASS','PRISMORA_LEGACY_DEPTH_PASS','PRISMORA_LEGACY_MATRICES_PASS','PRISMORA_LEGACY_OPTIONS_PASS','PRISMORA_LEGACY_SOURCE_ERROR_PASS','PRISMORA_LEGACY_NETHER_PASS','PRISMORA_LEGACY_DIMENSION_PASS','PRISMORA_LEGACY_RENDER_SMOKE_PASS')}elseif($Probe -eq 'performance'){@('PRISMORA_SCALED_TARGETS_PASS','PRISMORA_ENTRY_PROFILE_PASS','PRISMORA_PERFORMANCE_SMOKE_PASS','PRISMORA_ADAPTIVE_FALLBACK_PASS','PRISMORA_OPTION_WIDGETS_PASS','PRISMORA_PROFILE_BENCHMARK_PASS')}else{@('PRISMORA_GPU_PASS','PRISMORA_RENDER_SMOKE_PASS','PRISMORA_ERROR_RECOVERY_PASS','PRISMORA_BLOOM_PASS','PRISMORA_OPTIONS_PASS','PRISMORA_HOT_RELOAD_PASS','PRISMORA_RESTORE_PASS','PRISMORA_RESIZE_PASS')}
     if($packPath -and $Probe -eq 'terrain'){$markers=@($markers)+'PRISMORA_WORLD_TERRAIN_MATERIAL_PASS','PRISMORA_WORLD_TERRAIN_VERTEX_PASS','PRISMORA_WORLD_TERRAIN_CAMERA_PASS','PRISMORA_COMPLEMENTARY_TERRAIN_COMPILE_PASS','PRISMORA_WORLD_TERRAIN_UNIFORMS_PASS','PRISMORA_COMPLEMENTARY_SHADOW_COMPILE_PASS','PRISMORA_WORLD_SHADOW_COMPARE_PASS','PRISMORA_WORLD_SHADOW_GEOMETRY_PASS','PRISMORA_COMPLEMENTARY_SHADOW_DRAW_PASS','PRISMORA_COMPLEMENTARY_TERRAIN_DRAW_PASS','PRISMORA_COMPLEMENTARY_POST_COMPILE_PASS','PRISMORA_COMPLEMENTARY_POST_DRAW_PASS','PRISMORA_COMPLEMENTARY_PRESENT_PASS','PRISMORA_COMPLEMENTARY_PRESENT_CAPTURE','PRISMORA_COMPLEMENTARY_LIVE_SEQUENCE_PASS','PRISMORA_COMPLEMENTARY_MULTISECTION_PASS','PRISMORA_COMPLEMENTARY_POSE_HISTORY_PASS','PRISMORA_COMPLEMENTARY_VISIBLE_TERRAIN_PASS','PRISMORA_COMPLEMENTARY_SECTION_PLACE_PASS','PRISMORA_COMPLEMENTARY_SECTION_BREAK_PASS','PRISMORA_COMPLEMENTARY_SECTION_UNLOAD_PASS','PRISMORA_COMPLEMENTARY_SECTION_LOAD_PASS','PRISMORA_COMPLEMENTARY_FRAME_REUSE_PASS','PRISMORA_COMPLEMENTARY_FRAME_RESIZE_PASS','PRISMORA_COMPLEMENTARY_WORLD_RELEASE_PASS','PRISMORA_COMPLEMENTARY_SKY_COMPILE_PASS','PRISMORA_COMPLEMENTARY_SKY_DRAW_PASS','PRISMORA_COMPLEMENTARY_TRANSLUCENT_COMPILE_PASS','PRISMORA_COMPLEMENTARY_TRANSLUCENT_DRAW_PASS','PRISMORA_COMPLEMENTARY_TRANSLUCENT_DEPTH_PASS','PRISMORA_COMPLEMENTARY_TRANSLUCENT_MATERIALS_PASS','PRISMORA_COMPLEMENTARY_ENTITIES_COMPILE_PASS','PRISMORA_COMPLEMENTARY_ENTITIES_DRAW_PASS','PRISMORA_COMPLEMENTARY_ENTITIES_DEPTH_PASS','PRISMORA_COMPLEMENTARY_ENTITIES_SHADOW_PASS','PRISMORA_COMPLEMENTARY_PARTICLES_DRAW_PASS','PRISMORA_COMPLEMENTARY_HAND_DRAW_PASS','PRISMORA_COMPLEMENTARY_HAND_DEPTH_PASS','PRISMORA_COMPLEMENTARY_MIP_TAIL_PASS'}
     foreach($marker in $markers){
         if(-not $log.Contains($marker)){throw "Missing packaged validation marker: $marker"}
@@ -110,6 +112,14 @@ dependencies { implementation minecraft.dependency('net.minecraftforge:forge:26.
         foreach ($expected in @('deferred1 colortex0', 'composite colortex5', 'composite4 colortex0', 'composite6 colortex3')) {
             if (-not $log.Contains("PRISMORA_COMPLEMENTARY_MIP_PASS: $expected")) {
                 throw "Missing Complementary mip chain: $expected"
+            }
+        }
+    }
+    if ($Probe -eq 'playthrough') {
+        foreach ($dimension in @('minecraft:overworld','minecraft:the_nether','minecraft:the_end')) {
+            $match = [regex]::Match($log, "PRISMORA_PLAYTHROUGH_DIMENSION_PASS: $dimension seconds=(\d+) frames=(\d+)")
+            if (-not $match.Success -or [int]$match.Groups[1].Value -lt [Math]::Floor($PlaythroughSeconds / 3) -or [int]$match.Groups[2].Value -lt 1) {
+                throw "Insufficient rendered time for $dimension on $Backend"
             }
         }
     }
