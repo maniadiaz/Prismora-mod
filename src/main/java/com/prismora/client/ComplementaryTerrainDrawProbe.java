@@ -147,6 +147,11 @@ final class ComplementaryTerrainDrawProbe {
                     long items = features.stream().filter(feature -> feature.kind() == ComplementaryFeatureCapture.Kind.ITEM).mapToLong(feature -> feature.indices() / 6).sum();
                     Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_ENTITIES_DRAW_PASS: {} model and {} item faces submitted to scene and shadow", models, items);
                 }
+                if (!diagnostic && ComplementaryMenuSmokeProbe.includesModelsAndItems(modelsAndItems)
+                        && ComplementaryMenuSmokeProbe.requestFeature(ComplementaryMenuSmokeProbe.Feature.ENTITIES)) {
+                    ComplementaryTranslucentPass.verifyDepth("MENU_ENTITIES_DEPTH", sceneDepth,
+                            depth.view(GpuDepthTargets.Stage.BEFORE_HAND), ComplementaryMenuSmokeProbe::featureVerified);
+                }
                 depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
                 var opaqueDepth = depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
                 var materialCopy = targets.read(6);
@@ -185,7 +190,9 @@ final class ComplementaryTerrainDrawProbe {
                                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_PARTICLES_DRAW_PASS: {} textured particle quads", count);
                             }
                             boolean checkHand = diagnostic && !handFaces.isEmpty() && handMeasured.compareAndSet(false, true);
-                            if (checkHand) {
+                            boolean checkMenuHand = !handFaces.isEmpty()
+                                    && ComplementaryMenuSmokeProbe.requestFeature(ComplementaryMenuSmokeProbe.Feature.HAND);
+                            if (checkHand || checkMenuHand) {
                                 depth.snapshot(GpuDepthTargets.Stage.BEFORE_HAND);
                             }
                             ComplementaryEntityPass.draw(hand, handFaces, slot -> attachments.get("colortex" + slot),
@@ -193,6 +200,16 @@ final class ComplementaryTerrainDrawProbe {
                             if (checkHand) {
                                 ComplementaryTranslucentPass.verifyDepth("HAND_DEPTH", sceneDepth,
                                         depth.view(GpuDepthTargets.Stage.BEFORE_HAND), verified);
+                            }
+                            if (checkMenuHand) {
+                                ComplementaryTranslucentPass.verifyDepth("MENU_HAND_DEPTH", sceneDepth,
+                                        depth.view(GpuDepthTargets.Stage.BEFORE_HAND), ComplementaryMenuSmokeProbe::featureVerified);
+                            }
+                            if (!particleFaces.isEmpty()
+                                    && ComplementaryMenuSmokeProbe.requestFeature(ComplementaryMenuSmokeProbe.Feature.PARTICLES)) {
+                                Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_MENU_PARTICLES_PASS: {} submitted quads",
+                                        particleFaces.stream().mapToInt(feature -> feature.indices() / 6).sum());
+                                ComplementaryMenuSmokeProbe.featureVerified();
                             }
                             if (diagnostic && !handFaces.isEmpty()) {
                                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_HAND_DRAW_PASS: {} first-person faces",

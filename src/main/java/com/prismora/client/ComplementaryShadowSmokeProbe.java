@@ -170,6 +170,11 @@ final class ComplementaryShadowSmokeProbe {
                     }
                     if (diagnostic) ComplementaryTranslucentPass.verifyDepth("ENTITIES_SHADOW", depthView,
                             depth.view(GpuDepthTargets.Stage.BEFORE_HAND), verified);
+                    else if (ComplementaryMenuSmokeProbe.includesModelsAndItems(casters)
+                            && ComplementaryMenuSmokeProbe.requestFeature(ComplementaryMenuSmokeProbe.Feature.SHADOW)) {
+                        ComplementaryTranslucentPass.verifyDepth("MENU_ENTITIES_SHADOW", depthView,
+                                depth.view(GpuDepthTargets.Stage.BEFORE_HAND), ComplementaryMenuSmokeProbe::featureVerified);
+                    }
                 }
                 depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
                 ComplementaryTerrainDrawProbe.submit(resources, terrain, terrainData, vertices, count, atlas, noise.getTextureView(), repeat,

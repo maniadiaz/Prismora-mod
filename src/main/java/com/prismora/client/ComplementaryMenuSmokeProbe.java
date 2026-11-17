@@ -19,6 +19,22 @@ final class ComplementaryMenuSmokeProbe {
     private static int step;
     private static boolean depthRequested;
     private static volatile boolean depthVerified;
+    enum Feature { ENTITIES, SHADOW, HAND, PARTICLES }
+    private static final java.util.EnumSet<Feature> requested = java.util.EnumSet.noneOf(Feature.class);
+    private static volatile int featuresVerified;
+
+    static boolean requestFeature(Feature feature) {
+        return Boolean.getBoolean("prismora.complementaryMenuSmoke") && step == 3 && requested.add(feature);
+    }
+
+    static void featureVerified() {
+        featuresVerified++;
+    }
+
+    static boolean includesModelsAndItems(java.util.List<ComplementaryFeatureCapture.Draw> draws) {
+        return draws.stream().anyMatch(draw -> draw.kind() == ComplementaryFeatureCapture.Kind.MODEL)
+                && draws.stream().anyMatch(draw -> draw.kind() == ComplementaryFeatureCapture.Kind.ITEM);
+    }
 
     static boolean requestTranslucentDepth() {
         if (step != 3 || depthRequested || !TerrainSmokeProbe.hasTranslucentMaterials(32000, 31018)) return false;
@@ -50,15 +66,24 @@ final class ComplementaryMenuSmokeProbe {
             return;
         }
         if (client.player == null || ShaderController.INSTANCE.busy()) return;
+        if (client.player.getAbilities().mayfly && !client.player.getAbilities().flying) {
+            client.player.getAbilities().flying = true;
+            client.player.onUpdateAbilities();
+        }
+        if (step == 3 && ticks % 10 == 0) {
+            client.player.connection.sendCommand("particle minecraft:flame -526.5 75 71 0.4 0.2 0.3 0 32 force");
+        }
         var controller = ShaderController.INSTANCE;
         if (!controller.error().isEmpty()) throw new IllegalStateException(controller.error());
         var entry = controller.entries().stream().filter(e -> ComplementaryActivation.supports(e.pack())).findFirst().orElseThrow();
         switch (step) {
             case 1 -> {
-                client.player.connection.sendCommand("gamemode spectator");
                 client.player.connection.sendCommand("tp @s -526.5 76 70.5 0 75");
                 client.player.connection.sendCommand("setblock -527 74 71 minecraft:water");
                 client.player.connection.sendCommand("setblock -526 74 71 minecraft:cyan_stained_glass");
+                client.player.connection.sendCommand("time set 6000");
+                client.player.connection.sendCommand("summon minecraft:cow -526.5 73 72 {NoAI:1b,NoGravity:1b,Silent:1b}");
+                client.player.connection.sendCommand("summon minecraft:item -527 74 72 {Item:{id:\"minecraft:diamond\",count:1},NoGravity:1b,PickupDelay:32767s}");
                 client.gui.setScreen(new ShaderPackScreen(null));
                 click(client, entry.name());
                 step++;
@@ -69,7 +94,7 @@ final class ComplementaryMenuSmokeProbe {
                 step++;
             }
             case 3 -> {
-                if (TerrainSmokeProbe.runtimeFrames() < 5 || !depthVerified) return;
+                if (TerrainSmokeProbe.runtimeFrames() < 5 || !depthVerified || featuresVerified != Feature.values().length) return;
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_MENU_ENABLE_PASS: {} live frames", TerrainSmokeProbe.runtimeFrames());
                 client.gui.setScreen(new ShaderPackScreen(null));
                 click(client, Component.translatable("prismora.disable").getString());
