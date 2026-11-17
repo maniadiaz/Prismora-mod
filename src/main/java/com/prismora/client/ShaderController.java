@@ -27,6 +27,7 @@ public final class ShaderController {
 
     private boolean busy;
     private String activeDimension="";
+    private boolean startupRestorePending = true;
     private PackWatcher watcher;
     private int generation;
     private int lastWidth,lastHeight;private long resizeAt;
@@ -71,7 +72,7 @@ public final class ShaderController {
             }
         } catch(IOException e) { fail(e); }
     }
-    public void select(ShaderPackManager.Entry entry){if(busy||closed)return;if(entry!=null)inspected=entry.id();runtimePerformance=config.performance();suspended=false;performanceReason="";AdaptivePerformance.reset();activateEntry(entry);}
+    public void select(ShaderPackManager.Entry entry){if(busy||closed)return;startupRestorePending=false;if(entry!=null)inspected=entry.id();runtimePerformance=config.performance();suspended=false;performanceReason="";AdaptivePerformance.reset();activateEntry(entry);}
     private void activateEntry(ShaderPackManager.Entry entry) {
         if(busy||closed)return;
         if(entry != null && !entry.valid()) { error=entry.error();return; }
@@ -81,7 +82,7 @@ public final class ShaderController {
             activeDimension=com.prismora.render.PrismoraRenderer.dimensionName();
             var pack=entry==null?null:entry.pack();
             if (ComplementaryActivation.supports(pack)) {
-                var prepared = ComplementaryActivation.prepare(pack, activeDimension);
+                var prepared = ComplementaryActivation.prepare(pack, activeDimension, config.legacyOptions(entry.id()));
                 TerrainSmokeProbe.disableRuntime();
                 activation = com.prismora.render.PrismoraRenderer.hasResourceChain()
                         ? com.prismora.render.PrismoraRenderer.activate(null, effectivePerformance())
@@ -119,6 +120,15 @@ public final class ShaderController {
     private void resetWatcher(){try{if(watcher!=null)watcher.watch(manager.directory(),selected());}catch(IOException e){fail(e);}}
     public void tick(){
         if(closed)return;
+        if (startupRestorePending && !busy) {
+            startupRestorePending = false;
+            var restored = entries.stream().filter(entry -> entry.id().equals(selected())
+                    && ComplementaryActivation.supports(entry.pack())).findFirst();
+            if (restored.isPresent()) {
+                activateEntry(restored.get());
+                return;
+            }
+        }
         if(!busy&&!suspended&&!selected().isEmpty()&&Minecraft.getInstance().level!=null&&!activeDimension.equals(com.prismora.render.PrismoraRenderer.dimensionName())){
             var entry=entries.stream().filter(e->e.id().equals(selected())&&e.valid()).findFirst().orElse(null);
             if(entry!=null&&com.prismora.compat.LegacyPack.isLegacy(entry.pack())){activateEntry(entry);return;}

@@ -22,7 +22,10 @@ final class TerrainPackCompileProbe {
     record Programs(TerrainShaderTranslator.Program terrain, ComplementaryShadowSmokeProbe.Inputs shadow, List<ComplementaryPostCompileProbe.Pass> post, ComplementaryPostCompileProbe.Pass sky, ComplementaryTranslucentPass.Program translucent, ComplementaryEntityPass.Program entities, ComplementaryEntityPass.Program particles, ComplementaryEntityPass.Program hand) {}
 
     static Programs verify(LegacyPack pack, String dimension) throws IOException {
-        var options = Map.<String, String>of();
+        return verify(pack, dimension, Map.of());
+    }
+
+    static Programs verify(LegacyPack pack, String dimension, Map<String, String> options) throws IOException {
         var environment = ShaderPreprocessor.environment();
         var terrain = new PackContract(pack, options, environment, dimension).resolve("gbuffers_terrain").orElseThrow();
         var vertex = new ShaderPreprocessor(pack, options, environment).process(terrain.vertex());

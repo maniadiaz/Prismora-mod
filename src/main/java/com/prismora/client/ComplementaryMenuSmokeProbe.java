@@ -15,6 +15,9 @@ import net.minecraft.world.level.levelgen.presets.WorldPresets;
 
 /** Exercises real menu buttons with the production render bridge enabled. */
 final class ComplementaryMenuSmokeProbe {
+    private static final String RESTORE_PHASE = System.getProperty("prismora.complementaryRestorePhase", "");
+    private static final String OPTION = "T_SATURATION";
+    private static final String OPTION_VALUE = "0.50";
     private static int ticks;
     private static int step;
     private static boolean depthRequested;
@@ -76,6 +79,10 @@ final class ComplementaryMenuSmokeProbe {
         var controller = ShaderController.INSTANCE;
         if (!controller.error().isEmpty()) throw new IllegalStateException(controller.error());
         var entry = controller.entries().stream().filter(e -> ComplementaryActivation.supports(e.pack())).findFirst().orElseThrow();
+        if (!RESTORE_PHASE.isEmpty()) {
+            verifyRestore(client, controller, entry);
+            return;
+        }
         switch (step) {
             case 1 -> {
                 client.player.connection.sendCommand("tp @s -526.5 76 70.5 0 75");
@@ -132,6 +139,35 @@ final class ComplementaryMenuSmokeProbe {
             }
             default -> {}
         }
+    }
+
+    private static void verifyRestore(Minecraft client, ShaderController controller,
+                                      com.prismora.pack.ShaderPackManager.Entry entry) {
+        if (step == 1) {
+            client.player.connection.sendCommand("gamemode spectator");
+            client.player.connection.sendCommand("tp @s -526.5 76 70.5 0 75");
+            if (RESTORE_PHASE.equals("save")) {
+                client.gui.setScreen(new ShaderPackScreen(null));
+                click(client, entry.name());
+            }
+            step++;
+            return;
+        }
+        if (!entry.id().equals(controller.selected()) || !TerrainSmokeProbe.runtimeActive()) return;
+        if (RESTORE_PHASE.equals("save") && step == 2) {
+            client.gui.setScreen(null);
+            controller.applyLegacyOptions(entry.id(), java.util.Map.of(OPTION, OPTION_VALUE));
+            step++;
+            return;
+        }
+        if (TerrainSmokeProbe.runtimeFrames() < 3) return;
+        if (!OPTION_VALUE.equals(controller.legacyValues(entry.id()).get(OPTION))
+                || !TerrainSmokeProbe.compiledPostOption(OPTION, OPTION_VALUE)) {
+            throw new IllegalStateException("Complementary did not compile with the saved saturation");
+        }
+        Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_RESTART_{}_PASS: {} {}={}",
+                RESTORE_PHASE.toUpperCase(java.util.Locale.ROOT), entry.id(), OPTION, OPTION_VALUE);
+        client.stop();
     }
 
     private static void click(Minecraft client, String expected) {

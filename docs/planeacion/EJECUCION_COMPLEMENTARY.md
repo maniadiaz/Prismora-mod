@@ -125,6 +125,10 @@ La prueba entra al Nether y al End después del recorrido en el Overworld y comp
 
 ## Etapa 3.1. Activación desde el menú
 
-El selector de Prismora reconoce Complementary y usa su renderizador de geometría. La activación compila los programas de la dimensión activa e invalida la geometría de Minecraft para capturar los materiales del pack. La opción Desactivar libera sus recursos, y al elegir otro pack se entrega el renderizado al nuevo pack seleccionado. El renderizado en partida usa un frame por llamada y omite las lecturas de GPU del diagnóstico. Sigue usando la resolución interna reducida y la configuración base del pack.
+El selector de Prismora reconoce Complementary y usa su renderizador de geometría. La activación compila los programas de la dimensión activa e invalida la geometría de Minecraft para capturar los materiales del pack. La opción Desactivar libera sus recursos, y al elegir otro pack se entrega el renderizado al nuevo pack seleccionado. El renderizado en partida usa un frame por llamada y omite las lecturas de GPU del diagnóstico. Sigue usando la resolución interna reducida.
 
-La prueba del JAR pulsa los botones del menú en un mundo, espera frames renderizados con Complementary, lo desactiva, lo vuelve a activar y cambia a Prismora-Bloom. Quedan la aplicación de los ajustes del pack y la validación prolongada en las tres dimensiones.
+La prueba del JAR pulsa los botones del menú en un mundo, espera frames renderizados con Complementary, lo desactiva, lo vuelve a activar y cambia a Prismora-Bloom. Queda la validación prolongada en las tres dimensiones.
+
+## Restaurar el pack y sus ajustes al iniciar Minecraft
+
+Prismora carga la selección guardada al iniciar el cliente y usa las opciones guardadas del pack para compilar los programas de Complementary y cargar su mapa de materiales. La prueba ejecuta dos procesos de Minecraft por backend con la misma carpeta de configuración. En el primero selecciona Complementary y guarda T_SATURATION=0.50 por la ruta de Aplicar. En el segundo abre un mundo sin tocar el menú y comprueba que vuelve a renderizar con el pack y que el programa de posprocesado contiene el valor guardado.

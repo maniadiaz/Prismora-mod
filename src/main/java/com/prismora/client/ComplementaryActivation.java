@@ -27,9 +27,10 @@ public final class ComplementaryActivation {
         }
     }
 
-    static Prepared prepare(PackLoader.ShaderPack pack, String dimension) throws IOException {
+    static Prepared prepare(PackLoader.ShaderPack pack, String dimension, Map<String, String> overrides) throws IOException {
         var legacy = LegacyPack.inspect(pack.id(), pack.files());
-        return new Prepared(TerrainPackCompileProbe.verify(legacy, dimension),
-                BlockMaterials.load(legacy, Map.of(), ShaderPreprocessor.environment()));
+        var options = legacy.validated(overrides);
+        return new Prepared(TerrainPackCompileProbe.verify(legacy, dimension, options),
+                BlockMaterials.load(legacy, options, ShaderPreprocessor.environment()));
     }
 }

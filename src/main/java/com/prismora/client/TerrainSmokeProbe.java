@@ -102,6 +102,12 @@ public final class TerrainSmokeProbe {
                 && translucentFaces.stream().anyMatch(face -> face.materialId() == second);
     }
 
+    static boolean compiledPostOption(String name, String value) {
+        String definition = "#define " + name + " " + value;
+        return runtimeActive && packPrograms.post().stream()
+                .anyMatch(pass -> pass.shader().fragment().lines().anyMatch(definition::equals));
+    }
+
     static int runtimeFrames() {
         return runtimeFrames;
     }
