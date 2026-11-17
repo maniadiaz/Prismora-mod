@@ -132,7 +132,9 @@ final class ComplementaryTranslucentPass {
             }
             pass.drawIndexed(geometry.count(), 1, 0, 0, 0);
         }
-        Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TRANSLUCENT_DRAW_PASS: {} sorted faces", geometry.count() / 6);
+        if (!TerrainSmokeProbe.runtimeActive()) {
+            Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_TRANSLUCENT_DRAW_PASS: {} sorted faces", geometry.count() / 6);
+        }
     }
 
     static void verifyDepth(String label, GpuTextureView scene, GpuTextureView opaque, Runnable completed) {

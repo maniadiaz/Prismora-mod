@@ -122,3 +122,9 @@ El diagnóstico del Overworld captura los modelos y objetos emitidos por el rend
 El diagnóstico usa las texturas de ruido y las declaraciones de cloud-water de shaders.properties para los pases de geometría y deferred. El posprocesado genera una cadena de mipmaps desde la versión actual del adjunto antes de cada pase que la solicita. En la configuración base del Overworld están activas las solicitudes de deferred1, composite, composite4 y composite6. Se comprueba en GPU el texel de 1 × 1 de colortex0. Los niveles finales de las texturas rectangulares conservan al menos un texel en cada eje.
 
 La prueba entra al Nether y al End después del recorrido en el Overworld y compila los programas correspondientes a la dimensión activa. El dibujo completo con el pack se prueba en el Overworld. Quedan el dibujo continuo y la validación visual en el Nether y el End, además de las combinaciones de recursos y perfiles opcionales.
+
+## Etapa 3.1. Activación desde el menú
+
+El selector de Prismora reconoce Complementary y usa su renderizador de geometría. La activación compila los programas de la dimensión activa e invalida la geometría de Minecraft para capturar los materiales del pack. La opción Desactivar libera sus recursos, y al elegir otro pack se entrega el renderizado al nuevo pack seleccionado. El renderizado en partida usa un frame por llamada y omite las lecturas de GPU del diagnóstico. Sigue usando la resolución interna reducida y la configuración base del pack.
+
+La prueba del JAR pulsa los botones del menú en un mundo, espera frames renderizados con Complementary, lo desactiva, lo vuelve a activar y cambia a Prismora-Bloom. Quedan la aplicación de los ajustes del pack y la validación prolongada en las tres dimensiones.

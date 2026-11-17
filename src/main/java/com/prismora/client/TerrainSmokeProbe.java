@@ -89,6 +89,60 @@ public final class TerrainSmokeProbe {
     private static volatile boolean shadowsVerified;
     private static TerrainPackCompileProbe.Programs packPrograms;
     private static LegacyPack legacyPack;
+    private static boolean runtimeActive;
+    private static net.minecraft.client.multiplayer.ClientLevel runtimeWorld;
+    private static int runtimeFrames;
+
+    public static boolean runtimeActive() {
+        return runtimeActive;
+    }
+
+    static int runtimeFrames() {
+        return runtimeFrames;
+    }
+
+    static void enableRuntime(TerrainPackCompileProbe.Programs programs, BlockMaterials blockMaterials) {
+        disableRuntime();
+        packPrograms = programs;
+        materials = blockMaterials;
+        runtimeActive = true;
+        runtimeFrames = 0;
+    }
+
+    static void disableRuntime() {
+        if (!runtimeActive) return;
+        runtimeActive = false;
+        runtimeWorld = null;
+        closeComplementaryWorld();
+        materials = null;
+        packPrograms = null;
+    }
+
+    static void prepareRuntimeWorld(Minecraft client) {
+        if (!runtimeActive || runtimeWorld == client.level) return;
+        if (client.level != null && (client.gui.screen() != null || client.gui.overlay() != null)) return;
+        closeComplementaryWorld();
+        runtimeWorld = client.level;
+        if (runtimeWorld != null) {
+            captureStarted = true;
+            client.levelRenderer.invalidateCompiledGeometry(client.level, client.options, client.gameRenderer.mainCamera(), client.getBlockColors());
+        }
+    }
+
+    private static void renderRuntime(Minecraft client) {
+        if (!captureStarted || runtimeWorld != client.level || cameraFrame == null || client.player == null) return;
+        updatePreviewMesh(visibleTerrain(client));
+        if (previewMesh == null) return;
+        var resources = ComplementaryFrameResources.forTarget(client.gameRenderer.mainRenderTarget());
+        var sample = previewScene;
+        var sky = client.gameRenderer.gameRenderState().levelRenderState.skyRenderState;
+        var origin = sample.section().origin();
+        var eye = cameraFrame.position();
+        var center = new org.joml.Vector3f((float)(eye.x - origin.getX()), (float)(eye.y - origin.getY()), (float)(eye.z - origin.getZ()));
+        var light = new com.prismora.render.runtime.TerrainShadowFrame(sky.sunAngle, sky.moonAngle, center, 40f);
+        submitScene(resources, sample, light, () -> {});
+        runtimeFrames++;
+    }
     private record SectionMesh(SectionPos section, List<TerrainVertexData> faces) {}
     private static Map<SectionPos, List<TerrainVertexData>> previewSections = Map.of();
     private static int meshUpdates;
@@ -106,7 +160,8 @@ public final class TerrainSmokeProbe {
 
     private record FluidCapture(int material, List<TerrainVertexData.Corner> corners) {}
     private static final ThreadLocal<FluidCapture> fluidCapture = new ThreadLocal<>();
-    private static final ThreadLocal<List<TerrainVertexData>> building = new ThreadLocal<>();
+    private record SectionBuild(BlockMaterials materials, List<TerrainVertexData> faces) {}
+    private static final ThreadLocal<SectionBuild> building = new ThreadLocal<>();
     private static final SectionPos PRESENT_SECTION = SectionPos.of(-33, 4, 4);
     private static final List<Integer> PREVIEW_YAW = List.of(0, 14, 28);
     private static final List<Double> PREVIEW_X = List.of(-526.5, -528.5, -530.5);
@@ -248,6 +303,14 @@ public final class TerrainSmokeProbe {
 
     public static void renderComplementaryFrame() {
         var client = Minecraft.getInstance();
+        if (runtimeActive) {
+            try {
+                renderRuntime(client);
+            } catch (RuntimeException failure) {
+                ShaderController.INSTANCE.recover(failure);
+            }
+            return;
+        }
         if (finished || editCheck == EditCheck.NETHER || editCheck == EditCheck.END || !captureStarted || worldTicks <= 40 || cameraFrame == null
                 || client.player == null || client.gui.overlay() != null || client.gui.screen() != null) {
             return;
@@ -292,18 +355,7 @@ public final class TerrainSmokeProbe {
             TerrainUniformSmokeProbe.submit(packPrograms.terrain(), cameraFrame, sample.section(), () -> uniformsVerified = true);
             ShadowSamplingSmokeProbe.submit(() -> shadowsVerified = true);
         }
-        var sorted = new ArrayList<>(translucentFaces);
-        var view = cameraFrame.modelViewFromSection(sample.section());
-        sorted.sort(java.util.Comparator.comparingDouble(face -> translucentDepth(face, view)));
-        var features = ComplementaryFeatureCapture.upload(cameraFrame.position(), sample.section());
-        try (var buffer = sorted.isEmpty() ? null : TerrainVertexSmokeProbe.upload(sorted)) {
-            var geometry = buffer == null ? null : new ComplementaryTranslucentPass.Geometry(buffer, sorted.size() * 6);
-            ComplementaryShadowSmokeProbe.submit(resources, packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
-                    sample.section(), packPrograms.terrain(), packPrograms.post(), packPrograms.sky(),
-                    packPrograms.translucent(), geometry, packPrograms.entities(), packPrograms.particles(), packPrograms.hand(), features, () -> poseVerified = true);
-        } finally {
-            features.forEach(ComplementaryFeatureCapture.Draw::close);
-        }
+        submitScene(resources, sample, light, () -> poseVerified = true);
         if (requestedPose == 0) {
             firstFrameResources = resources;
             firstResourceCount = resources.size();
@@ -324,6 +376,22 @@ public final class TerrainSmokeProbe {
         }
         Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_WORLD_FRAME_PASS: pose {} submitted shadow, terrain and post from renderLevel", requestedPose + 1);
     }
+    private static void submitScene(ComplementaryFrameResources resources, SectionMesh sample,
+                                    com.prismora.render.runtime.TerrainShadowFrame light, Runnable completed) {
+        var sorted = new ArrayList<>(translucentFaces);
+        var view = cameraFrame.modelViewFromSection(sample.section());
+        sorted.sort(java.util.Comparator.comparingDouble(face -> translucentDepth(face, view)));
+        var features = ComplementaryFeatureCapture.upload(cameraFrame.position(), sample.section());
+        try (var buffer = sorted.isEmpty() ? null : TerrainVertexSmokeProbe.upload(sorted)) {
+            var geometry = buffer == null ? null : new ComplementaryTranslucentPass.Geometry(buffer, sorted.size() * 6);
+            ComplementaryShadowSmokeProbe.submit(resources, packPrograms.shadow(), previewMesh, sample.faces().size(), light, cameraFrame,
+                    sample.section(), packPrograms.terrain(), packPrograms.post(), packPrograms.sky(),
+                    packPrograms.translucent(), geometry, packPrograms.entities(), packPrograms.particles(), packPrograms.hand(), features, completed);
+        } finally {
+            features.forEach(ComplementaryFeatureCapture.Draw::close);
+        }
+    }
+
     private static double translucentDepth(TerrainVertexData face, Matrix4fc view) {
         double depth = 0;
         for (var corner : face.corners()) {
@@ -448,7 +516,8 @@ public final class TerrainSmokeProbe {
             previewSections = visible;
             return;
         }
-        var anchor = PRESENT_SECTION.origin();
+        var section = runtimeActive && cameraFrame != null ? SectionPos.of(cameraFrame.position()) : PRESENT_SECTION;
+        var anchor = section.origin();
         var faces = new ArrayList<TerrainVertexData>();
         var translucent = new ArrayList<TerrainVertexData>();
         for (var entry : visible.entrySet()) {
@@ -464,15 +533,16 @@ public final class TerrainSmokeProbe {
         }
         previewMesh = replacement;
         translucentFaces = List.copyOf(translucent);
-        previewScene = new SectionMesh(PRESENT_SECTION, List.copyOf(faces));
+        previewScene = new SectionMesh(section, List.copyOf(faces));
         previewSections = visible;
         meshUpdates++;
     }
 
     public static void beginSection() {
         building.remove();
-        if (captureStarted && materials != null) {
-            building.set(new ArrayList<>());
+        var snapshot = materials;
+        if (captureStarted && snapshot != null) {
+            building.set(new SectionBuild(snapshot, new ArrayList<>()));
         }
     }
 
@@ -485,18 +555,19 @@ public final class TerrainSmokeProbe {
     }
 
     public static void endSection(SectionCompiler.Results results) {
-        var faces = building.get();
+        var build = building.get();
         building.remove();
-        if (faces != null) {
-            ((TerrainSectionGeometry) (Object) results).prismora$setFaces(List.copyOf(faces));
+        if (build != null && build.materials() == materials) {
+            ((TerrainSectionGeometry) (Object) results).prismora$setFaces(List.copyOf(build.faces()));
         }
     }
     public static int materialId(BlockState state) {
-        return materials.id(state);
+        var build = building.get();
+        return (build == null ? materials : build.materials()).id(state);
     }
 
     public static void recordMaterial(int id, float x, float y, float z, BakedQuad quad, QuadInstance instance, boolean translucent) {
-        var faces = building.get();
+        var faces = building.get().faces();
         if (faces.size() >= 65_536) {
             throw new IllegalStateException("Section exceeds the terrain probe's face budget");
         }
@@ -525,7 +596,7 @@ public final class TerrainSmokeProbe {
         var corners = fluid.corners();
         corners.add(new TerrainVertexData.Corner(x, y, z, u, v, color, light));
         if (corners.size() == 4) {
-            building.get().add(TerrainVertexData.fromCorners(fluid.material(), corners, true));
+            building.get().faces().add(TerrainVertexData.fromCorners(fluid.material(), corners, true));
             corners.clear();
         }
     }

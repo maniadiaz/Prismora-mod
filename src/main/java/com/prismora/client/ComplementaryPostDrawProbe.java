@@ -45,6 +45,8 @@ final class ComplementaryPostDrawProbe {
                        GpuTextureView noise, GpuTextureView cloud, GpuSampler repeat, TerrainCameraFrame camera, TerrainSceneUniforms scene,
                        TerrainShadowFrame light, net.minecraft.core.SectionPos section, Map<String, GpuTextureView> shadows,
                        java.util.function.Consumer<Map<String, GpuTextureView>> drawTranslucency, Runnable completed) {
+        boolean diagnostic = !TerrainSmokeProbe.runtimeActive();
+        int frames = diagnostic ? 2 : 1;
         var order = programs.stream().map(ComplementaryPostCompileProbe.Pass::name).toList();
         if (!order.equals(ORDER)) {
             throw new IllegalStateException("Unexpected base Overworld post programs: " + order);
@@ -66,13 +68,13 @@ final class ComplementaryPostDrawProbe {
         var depthSpec = new GpuTargets.Spec(GpuFormat.R32_FLOAT, 1, 1, true, 0, 0, 0, 0);
         specs.put(14, depthSpec);
         specs.put(15, depthSpec);
-        var readback = device.createBuffer(() -> "Complementary final pixels", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ,
-                (long) frameBytes * 2 + (long) historyBytes * 2);
+        var readback = diagnostic ? device.createBuffer(() -> "Complementary final pixels", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ,
+                (long) frameBytes * 2 + (long) historyBytes * 2) : null;
         var buffers = resources.get("post colors", GpuTargets.class,
                 () -> new GpuTargets(device, specs, width, height, 32L * 1024 * 1024));
         var lastPose = previousPose == null ? camera : previousPose;
         var lastHistory = previousHistory;
-        int startingFrame = submissions * 2;
+        int startingFrame = submissions * frames;
         try {
             var output = resources.get("final color", GpuTexture.class, () -> device.createTexture("Complementary final output",
                     GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC, GpuFormat.RGBA8_UNORM, width, height, 1, 1));
@@ -80,7 +82,7 @@ final class ComplementaryPostDrawProbe {
             convertDepth(opaqueDepth, buffers.write(15));
             GpuTextureView firstHistory = null;
             boolean historyReused = false;
-            for (int frame = 0; frame < 2; frame++) {
+            for (int frame = 0; frame < frames; frame++) {
                 buffers.clear(false);
                 var restoreMaterial = device.createCommandEncoder();
                 for (int slot : List.of(3, 6)) {
@@ -133,7 +135,7 @@ final class ComplementaryPostDrawProbe {
                         var mip = resources.get("mips " + name + " " + format, ComplementaryMipChain.class,
                                 () -> new ComplementaryMipChain(name, format, source.getWidth(0), source.getHeight(0)));
                         passInputs.put(name, mip.render(source));
-                        if (frame == 0) {
+                        if (diagnostic && frame == 0) {
                             if (name.equals("colortex0") && post.name().equals("deferred1")) {
                                 mip.verifyTail();
                             }
@@ -172,7 +174,7 @@ final class ComplementaryPostDrawProbe {
                         slots.forEach(index -> available.put("colortex" + index, buffers.read(index)));
                     }
                 }
-                if (frame == 0) {
+                if (diagnostic && frame == 0) {
                     firstHistory = available.get("colortex2");
                     copyHistory(firstHistory, readback, 2L * frameBytes);
                 }
@@ -180,14 +182,18 @@ final class ComplementaryPostDrawProbe {
                     throw new IllegalStateException("Complementary composite6 did not receive the previous frame's colortex2");
                 }
 
-                if (frame == 1) {
+                if (frame == frames - 1) {
                     previousPose = camera;
                     previousHistory = available.get("colortex2");
                     submissions++;
-                    if (lastHistory != null) {
+                    if (diagnostic && lastHistory != null) {
                         Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_POSE_HISTORY_PASS: colortex2 survived camera update {}", submissions);
                     }
                     ComplementaryPresentProbe.stage(output);
+                }
+                if (!diagnostic) {
+                    completed.run();
+                    return;
                 }
                 var encoder = device.createCommandEncoder();
                 encoder.copyTextureToBuffer(output, readback, (long) frame * frameBytes, frame == 0 ? () -> {} : () -> {
@@ -203,7 +209,7 @@ final class ComplementaryPostDrawProbe {
                 encoder.submit();
             }
         } catch (RuntimeException failure) {
-            readback.close();
+            if (readback != null) readback.close();
             throw failure;
         }
     }

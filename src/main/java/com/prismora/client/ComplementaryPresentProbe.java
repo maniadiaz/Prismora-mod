@@ -48,7 +48,7 @@ public final class ComplementaryPresentProbe {
     static void stage(GpuTexture output) {
         var device = RenderSystem.getDevice();
         int width = output.getWidth(0), height = output.getHeight(0);
-        if (retained != null && !verified()) {
+        if (!TerrainSmokeProbe.runtimeActive() && retained != null && !verified()) {
             throw new IllegalStateException("Previous Complementary preview has not completed");
         }
         if (retained != null && (retained.getWidth(0) != width || retained.getHeight(0) != height
@@ -76,7 +76,7 @@ public final class ComplementaryPresentProbe {
 
     public static void draw(RenderTarget target) {
         var client = Minecraft.getInstance();
-        if (preview == null || client.gui.overlay() != null || client.gui.screen() != null) {
+        if (preview == null || client.gui.overlay() != null || (!TerrainSmokeProbe.runtimeActive() && client.gui.screen() != null)) {
             return;
         }
         var device = RenderSystem.getDevice();
@@ -91,7 +91,7 @@ public final class ComplementaryPresentProbe {
                     """, List.of(destination.texture().getFormat()), List.of("Preview"));
         }
         MrtPass.draw(device, blit, List.of(destination), Map.of("Preview", preview), sampler);
-        if (!checked) {
+        if (!TerrainSmokeProbe.runtimeActive() && !checked) {
             checked = true;
             verify(destination, sampler);
             capture(target);

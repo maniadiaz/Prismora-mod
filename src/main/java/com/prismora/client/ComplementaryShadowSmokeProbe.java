@@ -99,12 +99,13 @@ final class ComplementaryShadowSmokeProbe {
         terrainLayout.putFloat(terrainData, "sunAngle", sun - (float) Math.floor(sun));
         terrainLayout.putInt(terrainData, "entityId", 0);
 
+        boolean diagnostic = !TerrainSmokeProbe.runtimeActive();
         var casters = features.stream().filter(feature -> feature.kind() == ComplementaryFeatureCapture.Kind.MODEL || feature.kind() == ComplementaryFeatureCapture.Kind.ITEM).toList();
         var remaining = new java.util.concurrent.atomic.AtomicInteger(casters.isEmpty() ? 2 : 3);
         Runnable verified = () -> { if (remaining.decrementAndGet() == 0) completed.run(); };
         var color = new GpuTargets.Spec(TargetFormat.RGBA8, 1, 1, false, 0, 0, 0, 0);
-        var readback = device.createBuffer(() -> "Complementary shadow witness", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ,
-                SIZE * SIZE * 4L);
+        var readback = diagnostic ? device.createBuffer(() -> "Complementary shadow witness", GpuBuffer.USAGE_COPY_DST | GpuBuffer.USAGE_MAP_READ,
+                SIZE * SIZE * 4L) : null;
         try {
             var noise = resources.get("noise", DynamicTexture.class, () -> load("noise", inputs.noise()));
             var cloud = resources.get("cloud", DynamicTexture.class, () -> load("cloud-water", inputs.cloudWater()));
@@ -119,10 +120,10 @@ final class ComplementaryShadowSmokeProbe {
             targets.clear(true);
             depth.beginFrame();
             try (var uniforms = device.createBuffer(() -> "Complementary shadow uniforms", GpuBuffer.USAGE_UNIFORM, uniformData);
-                 var check = witnessProgram();
-                 var output = device.createTexture("Complementary shadow validation", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC,
-                     GpuFormat.RGBA8_UNORM, SIZE, SIZE, 1, 1);
-                 var outputView = device.createTextureView(output)) {
+                 var check = diagnostic ? witnessProgram() : null;
+                 var output = diagnostic ? device.createTexture("Complementary shadow validation", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_SRC,
+                     GpuFormat.RGBA8_UNORM, SIZE, SIZE, 1, 1) : null;
+                 var outputView = diagnostic ? device.createTextureView(output) : null) {
                 var program = ComplementaryPreviewPipelines.get("shadow", () -> GpuProgram.withVertices(device, "complementary_shadow_draw", shader.vertex(), shader.fragment(),
                          List.of(GpuFormat.RGBA8_UNORM, GpuFormat.RGBA8_UNORM), TerrainVertexData.FORMAT, PrimitiveTopology.QUADS,
                          shader.samplers(), DepthStencilState.DEFAULT, List.of(TerrainShaderTranslator.UNIFORM_BLOCK)));
@@ -167,13 +168,14 @@ final class ComplementaryShadowSmokeProbe {
                             pass.drawIndexed(feature.indices(), 1, 0, 0, 0);
                         }
                     }
-                    ComplementaryTranslucentPass.verifyDepth("ENTITIES_SHADOW", depthView,
+                    if (diagnostic) ComplementaryTranslucentPass.verifyDepth("ENTITIES_SHADOW", depthView,
                             depth.view(GpuDepthTargets.Stage.BEFORE_HAND), verified);
                 }
                 depth.snapshot(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY);
                 ComplementaryTerrainDrawProbe.submit(resources, terrain, terrainData, vertices, count, atlas, noise.getTextureView(), repeat,
                         depthView, depth.view(GpuDepthTargets.Stage.BEFORE_TRANSLUCENCY), targets.write(0), targets.write(1),
                         post, sky, translucent, geometry, cloud.getTextureView(), deferredCloud.getTextureView(), entities, particles, hand, features, camera, scene, light, section, verified);
+                if (!diagnostic) return;
                 MrtPass.draw(device, check, List.of(outputView), Map.of("ShadowDepth", depthView,
                         "ShadowColor0", targets.write(0), "ShadowColor1", targets.write(1)), nearest);
                 encoder.copyTextureToBuffer(output, readback, 0, () -> {
@@ -197,7 +199,7 @@ final class ComplementaryShadowSmokeProbe {
                 encoder.submit();
             }
         } catch (RuntimeException failure) {
-            readback.close();
+            if (readback != null) readback.close();
             throw new IllegalStateException("Complementary shadow render failed", failure);
         }
     }

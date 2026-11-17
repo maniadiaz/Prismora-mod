@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 abstract class ComplementaryPresentMixin {
     @Inject(method = "renderLevel", at = @At("HEAD"))
     private void prismora$beginWorld(CallbackInfo callback) {
-        if (Boolean.getBoolean("prismora.terrainSmoke")) {
+        if ((Boolean.getBoolean("prismora.terrainSmoke") || TerrainSmokeProbe.runtimeActive())) {
             ComplementaryFeatureCapture.beginWorld();
         }
     }
@@ -30,7 +30,7 @@ abstract class ComplementaryPresentMixin {
 
     @Inject(method = "renderLevel", at = @At("TAIL"))
     private void prismora$presentProbe(CallbackInfo callback) {
-        if (Boolean.getBoolean("prismora.terrainSmoke")) {
+        if ((Boolean.getBoolean("prismora.terrainSmoke") || TerrainSmokeProbe.runtimeActive())) {
             TerrainSmokeProbe.renderComplementaryFrame();
             ComplementaryPresentProbe.draw(((GameRenderer) (Object) this).mainRenderTarget());
         }

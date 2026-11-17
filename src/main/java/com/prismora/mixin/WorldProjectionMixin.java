@@ -14,7 +14,7 @@ public abstract class WorldProjectionMixin {
  @Redirect(method="renderLevel",at=@At(value="INVOKE",target="Lnet/minecraft/client/renderer/ProjectionMatrixBuffer;getBuffer(Lorg/joml/Matrix4f;)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;"),require=1)
  private GpuBufferSlice prismora$worldProjection(ProjectionMatrixBuffer buffer,Matrix4f projection){
   Uniforms.captureWorld(projection);
-  if(Boolean.getBoolean("prismora.terrainSmoke"))com.prismora.client.TerrainSmokeProbe.captureCamera(projection);
+  if(Boolean.getBoolean("prismora.terrainSmoke") || com.prismora.client.TerrainSmokeProbe.runtimeActive())com.prismora.client.TerrainSmokeProbe.captureCamera(projection);
   return buffer.getBuffer(projection);
  }
 }

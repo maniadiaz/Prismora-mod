@@ -41,6 +41,7 @@ public final class ShaderController {
         if(action==com.prismora.performance.AdaptiveController.Action.REDUCE){runtimePerformance=runtimePerformance.reduced();performanceReason="prismora.adapt.reduced";reload();}
         if(action==com.prismora.performance.AdaptiveController.Action.SUSPEND){
             busy=true;performanceReason="prismora.adapt.suspended";
+            TerrainSmokeProbe.disableRuntime();
             com.prismora.render.PrismoraRenderer.activate(null,runtimePerformance).whenCompleteAsync((unused,failure)->{busy=false;if(failure!=null)fail(new IOException(failure));else suspended=true;},Minecraft.getInstance());
         }
     }
@@ -79,9 +80,22 @@ public final class ShaderController {
         try{
             activeDimension=com.prismora.render.PrismoraRenderer.dimensionName();
             var pack=entry==null?null:entry.pack();
-            if(com.prismora.compat.LegacyPack.isLegacy(pack)){pack=com.prismora.compat.LegacyAdapter.prepare(pack,config.legacyOptions(entry.id()),activeDimension);}
-            else if(pack!=null)pack=PackOptions.apply(pack,config.options(entry.id()));
-            activation=com.prismora.render.PrismoraRenderer.activate(pack,effectivePerformance());
+            if (ComplementaryActivation.supports(pack)) {
+                var prepared = ComplementaryActivation.prepare(pack, activeDimension);
+                TerrainSmokeProbe.disableRuntime();
+                activation = com.prismora.render.PrismoraRenderer.hasResourceChain()
+                        ? com.prismora.render.PrismoraRenderer.activate(null, effectivePerformance())
+                        : java.util.concurrent.CompletableFuture.completedFuture(null);
+                activation = activation.thenRunAsync(prepared::install, Minecraft.getInstance());
+            } else {
+                if(com.prismora.compat.LegacyPack.isLegacy(pack)){pack=com.prismora.compat.LegacyAdapter.prepare(pack,config.legacyOptions(entry.id()),activeDimension);}
+                else if(pack!=null)pack=PackOptions.apply(pack,config.options(entry.id()));
+                boolean bridgeWasActive = TerrainSmokeProbe.runtimeActive();
+                TerrainSmokeProbe.disableRuntime();
+                activation = pack == null && bridgeWasActive
+                        ? java.util.concurrent.CompletableFuture.completedFuture(null)
+                        : com.prismora.render.PrismoraRenderer.activate(pack,effectivePerformance());
+            }
         }catch(Exception e){activation=java.util.concurrent.CompletableFuture.failedFuture(e);}
         activation.whenCompleteAsync((unused,failure)->{
             if(closed){busy=false;return;}
@@ -109,12 +123,13 @@ public final class ShaderController {
             var entry=entries.stream().filter(e->e.id().equals(selected())&&e.valid()).findFirst().orElse(null);
             if(entry!=null&&com.prismora.compat.LegacyPack.isLegacy(entry.pack())){activateEntry(entry);return;}
         }
+        TerrainSmokeProbe.prepareRuntimeWorld(Minecraft.getInstance());
         if(!busy && watcher!=null && watcher.changed()){if(selected().isEmpty()||suspended){refresh();resetWatcher();}else reload();}
         var window=Minecraft.getInstance().getWindow();long now=System.nanoTime();
         if(window.getWidth()!=lastWidth||window.getHeight()!=lastHeight){lastWidth=window.getWidth();lastHeight=window.getHeight();resizeAt=now;}
-        if(!busy && !suspended && !selected().isEmpty() && now-resizeAt>600_000_000L && (com.prismora.render.PrismoraRenderer.compiledWidth()!=lastWidth||com.prismora.render.PrismoraRenderer.compiledHeight()!=lastHeight))reload();
+        if(!TerrainSmokeProbe.runtimeActive() && !busy && !suspended && !selected().isEmpty() && now-resizeAt>600_000_000L && (com.prismora.render.PrismoraRenderer.compiledWidth()!=lastWidth||com.prismora.render.PrismoraRenderer.compiledHeight()!=lastHeight))reload();
     }
-    public void close(){closed=true;AdaptivePerformance.close();try{var current=watcher;watcher=null;if(current!=null)current.close();}catch(IOException e){Prismora.LOGGER.warn("Cannot close pack watcher",e);}}
+    public void close(){closed=true;TerrainSmokeProbe.disableRuntime();AdaptivePerformance.close();try{var current=watcher;watcher=null;if(current!=null)current.close();}catch(IOException e){Prismora.LOGGER.warn("Cannot close pack watcher",e);}}
     public List<PackOptions.Option> options(){
         try{return entries.stream().filter(e->e.id().equals(selected())&&e.valid()).findFirst().map(e->{try{return PackOptions.read(e.pack().manifest());}catch(IOException failure){throw new IllegalArgumentException(failure);}}).orElse(List.of());}
         catch(RuntimeException e){fail(e);return List.of();}

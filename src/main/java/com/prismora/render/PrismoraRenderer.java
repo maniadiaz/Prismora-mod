@@ -20,6 +20,7 @@ public final class PrismoraRenderer {
  public static boolean wantsDynamicData(){return dynamicData&&!active.isEmpty();}
  private static com.google.gson.JsonObject sourceFiles=new com.google.gson.JsonObject();
  public static String dimensionName(){var level=Minecraft.getInstance().level;return level==null?"minecraft:overworld":level.dimension().identifier().toString();}
+ public static boolean hasResourceChain(){return !active.isEmpty();}
  public static int compiledWidth(){return compiledWidth;}
  public static int compiledHeight(){return compiledHeight;}
  public static com.google.gson.JsonObject activeChain(){return active.isEmpty()?new com.google.gson.JsonObject():com.google.gson.JsonParser.parseString(new String(active.get("assets/minecraft/post_effect/end_of_frame.json"),java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();}
@@ -37,6 +38,7 @@ public final class PrismoraRenderer {
    var config=new com.prismora.client.config.PrismoraConfig(root.resolve("config/prismora.json"));config.load();
    if(!config.selected().isEmpty()){
     var pack=new PackLoader().load(root.resolve("shaderpacks").resolve(config.selected()));
+    if(com.prismora.client.ComplementaryActivation.supports(pack))return;
     if(com.prismora.compat.LegacyPack.isLegacy(pack))pack=com.prismora.compat.LegacyAdapter.prepare(pack,config.legacyOptions(pack.id()),dimensionName());else pack=com.prismora.pack.PackOptions.apply(pack,config.options(config.selected()));
     active=compile(pack,config.performance());
    }
