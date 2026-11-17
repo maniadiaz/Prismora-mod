@@ -111,7 +111,7 @@ Quedan por integrar el pase de sol y luna texturizados y la geometría de precip
 
 ## Etapa 2.2. Agua y transparencias
 
-El diagnóstico del Overworld captura la geometría real del agua y clasifica los modelos según la capa de Minecraft. Las caras translúcidas se ordenan por profundidad en vista y se dibujan con el gbuffers_water real del pack entre deferred y composite. Se conserva una copia de la profundidad opaca en depthtex1 y se entrega la profundidad de la escena con transparencias en depthtex0. El ensayo exige caras de agua y vidrio teñido y comprueba en GPU que las transparencias delante de la superficie opaca escriben profundidad sin sustituir una superficie opaca más cercana.
+El diagnóstico del Overworld captura la geometría real del agua y clasifica los modelos según la capa de Minecraft. Las caras translúcidas se ordenan por profundidad en vista y se dibujan con el gbuffers_water real del pack entre deferred y composite. Se conserva una copia de la profundidad opaca en depthtex1 y se entrega la profundidad de la escena con transparencias en depthtex0. El ensayo exige caras de agua y vidrio teñido y comprueba en GPU que las transparencias delante de la superficie opaca escriben profundidad sin sustituir una superficie opaca más cercana. La prueba de activación desde el menú repite esta comprobación en una partida normal con agua y vidrio teñido.
 
 ## Etapa 2.3. Entidades, objetos, mano y partículas
 

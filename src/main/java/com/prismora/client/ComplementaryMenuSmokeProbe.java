@@ -17,6 +17,18 @@ import net.minecraft.world.level.levelgen.presets.WorldPresets;
 final class ComplementaryMenuSmokeProbe {
     private static int ticks;
     private static int step;
+    private static boolean depthRequested;
+    private static volatile boolean depthVerified;
+
+    static boolean requestTranslucentDepth() {
+        if (step != 3 || depthRequested || !TerrainSmokeProbe.hasTranslucentMaterials(32000, 31018)) return false;
+        depthRequested = true;
+        return true;
+    }
+
+    static void translucentDepthVerified() {
+        depthVerified = true;
+    }
 
     private ComplementaryMenuSmokeProbe() {}
 
@@ -45,6 +57,8 @@ final class ComplementaryMenuSmokeProbe {
             case 1 -> {
                 client.player.connection.sendCommand("gamemode spectator");
                 client.player.connection.sendCommand("tp @s -526.5 76 70.5 0 75");
+                client.player.connection.sendCommand("setblock -527 74 71 minecraft:water");
+                client.player.connection.sendCommand("setblock -526 74 71 minecraft:cyan_stained_glass");
                 client.gui.setScreen(new ShaderPackScreen(null));
                 click(client, entry.name());
                 step++;
@@ -55,7 +69,7 @@ final class ComplementaryMenuSmokeProbe {
                 step++;
             }
             case 3 -> {
-                if (TerrainSmokeProbe.runtimeFrames() < 5) return;
+                if (TerrainSmokeProbe.runtimeFrames() < 5 || !depthVerified) return;
                 Prismora.LOGGER.info("PRISMORA_COMPLEMENTARY_MENU_ENABLE_PASS: {} live frames", TerrainSmokeProbe.runtimeFrames());
                 client.gui.setScreen(new ShaderPackScreen(null));
                 click(client, Component.translatable("prismora.disable").getString());

@@ -172,6 +172,10 @@ final class ComplementaryTerrainDrawProbe {
                                     repeat, camera, scene, light, section);
                             if (diagnostic && translucencyMeasured.compareAndSet(false, true)) {
                                 ComplementaryTranslucentPass.verifyDepth("TRANSLUCENT_DEPTH", sceneDepth, opaqueDepth, verified);
+                            } else if (Boolean.getBoolean("prismora.complementaryMenuSmoke")
+                                    && geometry != null && ComplementaryMenuSmokeProbe.requestTranslucentDepth()) {
+                                ComplementaryTranslucentPass.verifyDepth("MENU_TRANSLUCENT_DEPTH", sceneDepth, opaqueDepth,
+                                        ComplementaryMenuSmokeProbe::translucentDepthVerified);
                             }
                             entityInputs.put("gaux2", attachments.get("colortex5"));
                             ComplementaryEntityPass.draw(particles, particleFaces, slot -> attachments.get("colortex" + slot),

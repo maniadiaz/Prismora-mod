@@ -97,6 +97,11 @@ public final class TerrainSmokeProbe {
         return runtimeActive;
     }
 
+    static boolean hasTranslucentMaterials(int first, int second) {
+        return translucentFaces.stream().anyMatch(face -> face.materialId() == first)
+                && translucentFaces.stream().anyMatch(face -> face.materialId() == second);
+    }
+
     static int runtimeFrames() {
         return runtimeFrames;
     }
